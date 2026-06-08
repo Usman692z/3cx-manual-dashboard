@@ -502,7 +502,51 @@ tbody tr:hover .sticky{background:var(--card2)}
     <div id="dept-summary-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:var(--g)"></div>
   </div>
 
-  <div class="chart-grid g1"><div class="chart-card"><h3>Calls Per Day</h3><canvas id="ch-day" style="max-height:200px"></canvas></div></div>  <div class="chart-grid g3">
+  <div class="chart-grid g1"><div class="chart-card"><h3>Calls Per Day</h3><canvas id="ch-day" style="max-height:200px"></canvas></div></div>
+
+  <!-- ── ANSWERED CALLS BY DAY REPORT ── -->
+  <div id="daily-ans-section" style="margin-bottom:var(--g)">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+      <span style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">📅 Answered Calls — Daily Comparison</span>
+      <div style="flex:1;height:1px;background:var(--border)"></div>
+      <span id="daily-ans-range" style="font-size:11px;color:var(--muted)"></span>
+    </div>
+
+    <!-- KPI summary row -->
+    <div id="daily-ans-kpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:var(--g);margin-bottom:var(--g)"></div>
+
+    <!-- Chart -->
+    <div class="chart-grid g1" style="margin-bottom:var(--g)">
+      <div class="chart-card">
+        <h3>Answered vs Unanswered — By Day</h3>
+        <canvas id="ch-daily-ans" style="max-height:220px"></canvas>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="tcard" style="margin-bottom:0">
+      <h3>Daily Answered Calls Detail <span class="cnt" id="daily-ans-cnt"></span></h3>
+      <div class="tbl-wrap">
+        <table id="daily-ans-tbl">
+          <thead><tr>
+            <th onclick="sortDailyAns('date')" style="cursor:pointer">Date ↕</th>
+            <th onclick="sortDailyAns('day')"  style="cursor:pointer">Day ↕</th>
+            <th onclick="sortDailyAns('total')" style="cursor:pointer;color:var(--blue)">Total ↕</th>
+            <th onclick="sortDailyAns('answered')" style="cursor:pointer;color:var(--green)">Answered ↕</th>
+            <th onclick="sortDailyAns('unanswered')" style="cursor:pointer;color:var(--red)">Unanswered ↕</th>
+            <th onclick="sortDailyAns('ans_rate')" style="cursor:pointer;color:var(--orange)">Answer Rate ↕</th>
+            <th style="min-width:120px">Progress</th>
+            <th onclick="sortDailyAns('vs_avg')" style="cursor:pointer;color:var(--cyan)">vs Avg ↕</th>
+          </tr></thead>
+          <tbody id="daily-ans-body">
+            <tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px">Load data to see daily breakdown</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div><!-- /daily-ans-section -->
+
+  <div class="chart-grid g3">
     <div class="chart-card"><h3>Call Result</h3><canvas id="ch-res" style="max-height:260px"></canvas></div>
     <div class="chart-card"><h3>Direction Split</h3><canvas id="ch-dir" style="max-height:260px"></canvas></div>
     <div class="chart-card"><h3>Day of Week</h3><canvas id="ch-wd" style="max-height:260px"></canvas></div>
@@ -1301,6 +1345,7 @@ document.addEventListener('click',e=>{
 function renderAll(){
   renderKPIs();
   if(chartJsReady) buildCharts();
+  buildDailyAnsweredReport();
   buildAgData();renderAgTable();
   if(chartJsReady) buildAgCharts();
   renderAnalysis();
@@ -1310,6 +1355,144 @@ function renderAll(){
   buildMTD();
   buildMonthly();
   AB_PG=0;renderAbandoned();
+}
+
+// ============================================================
+//  DAILY ANSWERED CALLS REPORT
+// ============================================================
+let DAILY_SORT={col:'date',dir:1};
+let DAILY_DATA=[];
+
+function buildDailyAnsweredReport(){
+  if(!FILT.length){
+    document.getElementById('daily-ans-body').innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px">No data</td></tr>';
+    return;
+  }
+
+  // Group by date
+  const byDay={};
+  FILT.forEach(r=>{
+    const d=r._date;if(!d)return;
+    if(!byDay[d])byDay[d]={date:d,total:0,answered:0,unanswered:0};
+    byDay[d].total++;
+    if(r['Status']==='Answered')byDay[d].answered++;
+    if(r['Status']==='Unanswered')byDay[d].unanswered++;
+  });
+
+  const WD_NAMES=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  DAILY_DATA=Object.values(byDay).map(d=>{
+    const dt=new Date(d.date+'T00:00:00');
+    return{...d,
+      day:WD_NAMES[dt.getDay()]||'',
+      ans_rate:d.total?+(d.answered/d.total*100).toFixed(1):0,
+    };
+  });
+
+  // Compute average answered per day
+  const avgAns=DAILY_DATA.length?+(DAILY_DATA.reduce((s,d)=>s+d.answered,0)/DAILY_DATA.length).toFixed(1):0;
+  const avgRate=DAILY_DATA.length?+(DAILY_DATA.reduce((s,d)=>s+d.ans_rate,0)/DAILY_DATA.length).toFixed(1):0;
+
+  DAILY_DATA=DAILY_DATA.map(d=>({...d,vs_avg:+(d.answered-avgAns).toFixed(1)}));
+
+  // Best/worst day
+  const sorted=[...DAILY_DATA].sort((a,b)=>b.ans_rate-a.ans_rate);
+  const best=sorted[0],worst=sorted[sorted.length-1];
+  const totalAns=DAILY_DATA.reduce((s,d)=>s+d.answered,0);
+  const totalAll=DAILY_DATA.reduce((s,d)=>s+d.total,0);
+
+  // KPI summary
+  const dates=DAILY_DATA.map(d=>d.date).sort();
+  document.getElementById('daily-ans-range').textContent=dates.length?(dates[0]+' – '+dates[dates.length-1]):'';
+  document.getElementById('daily-ans-cnt').textContent=DAILY_DATA.length+' days';
+
+  document.getElementById('daily-ans-kpis').innerHTML=`
+    <div class="kpi gr"><div class="kpi-lbl">Total Answered</div><div class="kpi-val" style="color:var(--green)">${totalAns.toLocaleString()}</div><div class="kpi-sub">across all days</div></div>
+    <div class="kpi or"><div class="kpi-lbl">Avg Answer Rate</div><div class="kpi-val" style="color:var(--orange)">${avgRate}%</div><div class="kpi-sub">per day average</div></div>
+    <div class="kpi bl"><div class="kpi-lbl">Avg Answered/Day</div><div class="kpi-val" style="color:var(--blue)">${avgAns}</div><div class="kpi-sub">calls per day</div></div>
+    <div class="kpi gr"><div class="kpi-lbl">Best Day</div><div class="kpi-val" style="font-size:16px;margin-top:2px">${best?best.date:'-'}</div><div class="kpi-sub" style="color:var(--green)">${best?best.ans_rate+'% answer rate':''}</div></div>
+    <div class="kpi rd"><div class="kpi-lbl">Worst Day</div><div class="kpi-val" style="font-size:16px;margin-top:2px">${worst?worst.date:'-'}</div><div class="kpi-sub" style="color:var(--red)">${worst?worst.ans_rate+'% answer rate':''}</div></div>
+    <div class="kpi bl"><div class="kpi-lbl">Active Days</div><div class="kpi-val">${DAILY_DATA.length}</div><div class="kpi-sub">days with calls</div></div>
+  `;
+
+  // Chart
+  if(window.Chart){
+    const C=chartColors();
+    const sorted2=[...DAILY_DATA].sort((a,b)=>a.date.localeCompare(b.date));
+    mkChart('ch-daily-ans',{type:'bar',data:{labels:sorted2.map(d=>d.date),datasets:[
+      {label:'Answered',data:sorted2.map(d=>d.answered),backgroundColor:'rgba(16,219,160,.75)',borderRadius:3,borderWidth:0,stack:'s',datalabels:{display:false}},
+      {label:'Unanswered',data:sorted2.map(d=>d.unanswered),backgroundColor:'rgba(255,68,96,.55)',borderRadius:3,borderWidth:0,stack:'s',
+       datalabels:{display:true,color:C.text,font:{size:9,weight:'700'},formatter:(v,ctx)=>{const idx=ctx.dataIndex;const tot=sorted2[idx].total;return tot>0?(sorted2[idx].ans_rate)+'%':'' },anchor:'end',align:'end',rotation:-90,offset:2,clamp:true}},
+    ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{position:'top',labels:{usePointStyle:true,padding:14,color:C.text}},
+        tooltip:{callbacks:{label:c=>{const d=sorted2[c.dataIndex];return c.dataset.label==='Answered'?' Answered: '+d.answered+' ('+d.ans_rate+'%)'  :' Unanswered: '+d.unanswered+' ('+(100-d.ans_rate).toFixed(1)+'%)'   }}}},
+      scales:{x:{grid:{display:false},ticks:{maxTicksLimit:16,color:C.text}},y:{beginAtZero:true,grid:{color:C.grid},ticks:{color:C.text},stacked:true}}
+    }});
+  }
+
+  renderDailyAnsTable();
+}
+
+function sortDailyAns(col){
+  if(DAILY_SORT.col===col)DAILY_SORT.dir*=-1;
+  else{DAILY_SORT.col=col;DAILY_SORT.dir=col==='date'||col==='day'?1:-1;}
+  renderDailyAnsTable();
+}
+
+function renderDailyAnsTable(){
+  if(!DAILY_DATA.length)return;
+  const sorted=[...DAILY_DATA].sort((a,b)=>{
+    const av=a[DAILY_SORT.col],bv=b[DAILY_SORT.col];
+    return(typeof av==='string'?av.localeCompare(bv):av-bv)*DAILY_SORT.dir;
+  });
+
+  const avgAns=+(DAILY_DATA.reduce((s,d)=>s+d.answered,0)/DAILY_DATA.length).toFixed(1);
+
+  const rows=sorted.map(d=>{
+    const rateCls=d.ans_rate>=70?'rhi':d.ans_rate>=50?'rmd':'rlo';
+    const vsAvg=d.vs_avg;
+    const vsColor=vsAvg>0?'var(--green)':vsAvg<0?'var(--red)':'var(--muted)';
+    const vsArrow=vsAvg>0?'▲':vsAvg<0?'▼':'—';
+    const dayColors={Mon:'#58a6ff',Tue:'#58a6ff',Wed:'#58a6ff',Thu:'#58a6ff',Fri:'#58a6ff',Sat:'#bc8cff',Sun:'#f85149'};
+    const dayColor=dayColors[d.day]||'var(--muted)';
+    return`<tr>
+      <td style="font-weight:700;font-size:12px">${d.date}</td>
+      <td><span style="color:${dayColor};font-weight:700;font-size:12px">${d.day}</span></td>
+      <td style="font-weight:700;color:var(--blue)">${d.total}</td>
+      <td style="color:var(--green);font-weight:700">${d.answered}
+        <span style="color:var(--muted);font-size:10px;margin-left:3px">(${d.total?(d.answered/d.total*100).toFixed(1):0}%)</span>
+      </td>
+      <td style="color:var(--red)">${d.unanswered}
+        <span style="color:var(--muted);font-size:10px;margin-left:3px">(${d.total?(d.unanswered/d.total*100).toFixed(1):0}%)</span>
+      </td>
+      <td><span class="rate-pill ${rateCls}">${d.ans_rate}%</span></td>
+      <td style="min-width:120px">
+        <div style="display:flex;align-items:center;gap:6px">
+          <div class="pbar" style="flex:1;height:7px;border-radius:4px">
+            <div class="pfill" style="width:${d.ans_rate}%;background:${d.ans_rate>=70?'var(--green)':d.ans_rate>=50?'var(--orange)':'var(--red)'};border-radius:4px;height:100%"></div>
+          </div>
+          <span style="font-size:10px;color:var(--muted);width:30px;text-align:right">${d.ans_rate}%</span>
+        </div>
+      </td>
+      <td style="color:${vsColor};font-weight:700;font-size:12px">${vsArrow} ${Math.abs(vsAvg)}</td>
+    </tr>`;
+  });
+
+  // Totals row
+  const T={total:DAILY_DATA.reduce((s,d)=>s+d.total,0),answered:DAILY_DATA.reduce((s,d)=>s+d.answered,0),unanswered:DAILY_DATA.reduce((s,d)=>s+d.unanswered,0)};
+  T.ans_rate=T.total?+(T.answered/T.total*100).toFixed(1):0;
+  const tRateCls=T.ans_rate>=70?'rhi':T.ans_rate>=50?'rmd':'rlo';
+  rows.push(`<tr style="background:rgba(248,159,80,.08);border-top:2px solid var(--orange);font-weight:800">
+    <td style="color:var(--orange)">TOTAL</td>
+    <td style="color:var(--muted);font-size:11px">${DAILY_DATA.length} days</td>
+    <td style="color:var(--blue);font-weight:800">${T.total}</td>
+    <td style="color:var(--green);font-weight:800">${T.answered} <span style="color:var(--muted);font-size:10px">(${T.ans_rate}%)</span></td>
+    <td style="color:var(--red);font-weight:800">${T.unanswered} <span style="color:var(--muted);font-size:10px">(${T.total?(T.unanswered/T.total*100).toFixed(1):0}%)</span></td>
+    <td><span class="rate-pill ${tRateCls}">${T.ans_rate}%</span></td>
+    <td><div class="pbar" style="height:7px;border-radius:4px"><div class="pfill" style="width:${T.ans_rate}%;background:var(--orange);border-radius:4px;height:100%"></div></div></td>
+    <td style="color:var(--muted)">—</td>
+  </tr>`);
+
+  document.getElementById('daily-ans-body').innerHTML=rows.join('');
 }
 
 // ============================================================
