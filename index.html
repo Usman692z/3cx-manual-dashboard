@@ -679,7 +679,7 @@ tbody tr:hover .sticky{background:var(--card2)}
         <th onclick="sa('answered')">Answered&#8597;</th>
         <th onclick="sa('unanswered')">Unanswered&#8597;</th>
         <th onclick="sa('ans_rate')">Answer Rate&#8597;</th>
-        <th onclick="sa('completed')">Completed&#8597;</th>
+        <th onclick="sa('completed')" style="color:var(--green)" id="th-completed">✅ Completed&#8597;</th>
         <th onclick="sa('declined')">Declined&#8597;</th>
         <th onclick="sa('wrong')">Wrong#&#8597;</th>
         <th onclick="sa('timed_out')">Timed Out&#8597;</th>
@@ -1825,7 +1825,7 @@ function renderAgTable(){
       '<td style="color:var(--green)">'+np(a.answered)+'</td>'+
       '<td style="color:var(--red)">'+np(a.unanswered)+'</td>'+
       '<td>'+rp(a.ans_rate)+bar+'</td>'+
-      '<td style="color:var(--green)">'+np(a.completed)+'</td>'+
+      '<td style="color:var(--green);background:rgba(16,219,160,.07);border-left:2px solid rgba(16,219,160,.4);font-weight:700">'+np(a.completed)+'</td>'+
       '<td style="color:var(--red)">'+np(a.declined)+'</td>'+
       '<td style="color:#ff9090">'+np(a.wrong)+'</td>'+
       '<td style="color:var(--orange)">'+np(a.timed_out)+'</td>'+
@@ -1864,7 +1864,7 @@ function renderAgTable(){
     '<td style="color:var(--green)">'+tnp(T.answered)+'</td>'+
     '<td style="color:var(--red)">'+tnp(T.unanswered)+'</td>'+
     '<td>'+rp(T.ans_rate)+tbar+'</td>'+
-    '<td style="color:var(--green)">'+tnp(T.completed)+'</td>'+
+    '<td style="color:var(--green);background:rgba(16,219,160,.07);border-left:2px solid rgba(16,219,160,.4);font-weight:800">'+tnp(T.completed)+'</td>'+
     '<td style="color:var(--red)">'+tnp(T.declined)+'</td>'+
     '<td style="color:#ff9090">'+tnp(T.wrong)+'</td>'+
     '<td style="color:var(--orange)">'+tnp(T.timed_out)+'</td>'+
