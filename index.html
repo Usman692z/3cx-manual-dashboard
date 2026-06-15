@@ -643,7 +643,8 @@ tbody tr:hover .sticky{background:var(--card2)}
         <th class="sticky" onclick="sa('agent')">Agent&#8597;</th>
         <th onclick="sa('dept')" style="color:#14AEC3">Department&#8597;</th>
         <th onclick="sa('lang')" style="color:#bc8cff">Language&#8597;</th>
-        <th onclick="sa('total')">Total&#8597;</th>
+        <th onclick="sa('unique')" style="color:var(--cyan)">Unique&#8597;</th>
+        <th onclick="sa('total')" style="color:var(--muted)">Total Attempts&#8597;</th>
         <th onclick="sa('answered')">Answered&#8597;</th>
         <th onclick="sa('unanswered')">Unanswered&#8597;</th>
         <th onclick="sa('ans_rate')">Answer Rate&#8597;</th>
@@ -1694,8 +1695,12 @@ function buildAgData(){
   FILT.forEach(r=>{
     const a=agentOf(r);
     if(!isAgent(a))return;
-    if(!map[a])map[a]={agent:a,lang:agentLang(a),type:agentType(a),dept:agentDept(a),total:0,answered:0,unanswered:0,waiting:0,completed:0,declined:0,wrong:0,timed_out:0,ts:0,tc:0,ss:0,sc:0};
+    if(!map[a])map[a]={agent:a,lang:agentLang(a),type:agentType(a),dept:agentDept(a),total:0,answered:0,unanswered:0,waiting:0,completed:0,declined:0,wrong:0,timed_out:0,ts:0,tc:0,ss:0,sc:0,_nums:new Set()};
     const m=map[a]; m.total++;
+    // Track unique other-party number
+    const dir=(r['Direction']||'').trim();
+    const otherNum=(dir==='Outbound'?(r['To']||''):(r['From']||'')).trim().replace(/\D/g,'');
+    if(otherNum) m._nums.add(otherNum);
     if(r['Status']==='Answered'){m.answered++;m.ts+=r._ts;m.tc++}
     if(r['Status']==='Unanswered')m.unanswered++;
     if(r['Status']==='Waiting')m.waiting++;
@@ -1706,6 +1711,7 @@ function buildAgData(){
     if(r._sent!=null){m.ss+=r._sent;m.sc++}
   });
   AG=Object.values(map).map(m=>({...m,
+    unique:m._nums.size,
     ans_rate:m.total?+(m.answered/m.total*100).toFixed(1):0,
     avg_talk:m.tc?sfmt(m.ts/m.tc):'-',
     avg_talk_s:m.tc?m.ts/m.tc:0,
@@ -1728,7 +1734,7 @@ function renderAgTable(){
   const data=[...AG].filter(a=>(!langFilter||a.lang===langFilter)&&(!typeFilter||a.type===typeFilter)&&(!deptFilter||a.dept===deptFilter)).sort((a,b)=>{const av=a[AG_SORT.col]??'',bv=b[AG_SORT.col]??'';return typeof av==='number'?(av-bv)*AG_SORT.dir:String(av).localeCompare(String(bv))*AG_SORT.dir});
   setText('ag-cnt',data.length+' agents');
   const body=document.getElementById('ag-body');
-  if(!data.length){body.innerHTML='<tr><td colspan="13" style="text-align:center;color:var(--muted);padding:20px">No agents match filters</td></tr>';return;}
+  if(!data.length){body.innerHTML='<tr><td colspan="14" style="text-align:center;color:var(--muted);padding:20px">No agents match filters</td></tr>';return;}
 
   const rp=(v)=>{const c=v>=60?'rhi':v>=40?'rmd':'rlo';return'<span class="rate-pill '+c+'">'+v+'%</span>'};
 
@@ -1737,11 +1743,14 @@ function renderAgTable(){
     const pct=(v)=>a.total?+(v/a.total*100).toFixed(1):0;
     const np=(v)=>v+'<span style="color:var(--muted);font-size:10px;margin-left:3px">('+pct(v)+'%)</span>';
     const langBadge=a.lang?'<span style="background:rgba(188,140,255,.13);border:1px solid rgba(188,140,255,.3);color:#bc8cff;font-size:10px;font-weight:600;padding:1px 7px;border-radius:20px;white-space:nowrap">'+esc(a.lang)+'</span>':'<span style="color:var(--muted);font-size:11px">—</span>';
+    const dupRatio=a.unique>0?+(a.total/a.unique).toFixed(1):1;
+    const uniqueBadge='<span style="color:var(--cyan);font-weight:700">'+a.unique+'</span>'+(a.unique!==a.total?'<span style="color:var(--muted);font-size:10px;margin-left:3px">(×'+dupRatio+')</span>':'');
     return'<tr>'+
       '<td class="sticky" style="font-weight:700">'+esc(a.agent)+'</td>'+
       '<td>'+deptBadge(a.dept)+'</td>'+
       '<td>'+langBadge+'</td>'+
-      '<td style="font-weight:700">'+a.total+'</td>'+
+      '<td>'+uniqueBadge+'</td>'+
+      '<td style="font-weight:700;color:var(--muted)">'+a.total+'</td>'+
       '<td style="color:var(--green)">'+np(a.answered)+'</td>'+
       '<td style="color:var(--red)">'+np(a.unanswered)+'</td>'+
       '<td>'+rp(a.ans_rate)+bar+'</td>'+
@@ -1777,7 +1786,8 @@ function renderAgTable(){
     '<td class="sticky" style="font-weight:800;color:var(--orange)">TOTAL ('+data.length+')</td>'+
     '<td style="color:var(--muted);font-size:11px">All</td>'+
     '<td style="color:var(--muted);font-size:11px">All</td>'+
-    '<td style="font-weight:800;color:var(--orange)">'+T.total+'</td>'+
+    '<td style="color:var(--cyan);font-weight:800">'+data.reduce((s,a)=>s+a.unique,0)+'</td>'+
+    '<td style="font-weight:800;color:var(--muted)">'+T.total+'</td>'+
     '<td style="color:var(--green)">'+tnp(T.answered)+'</td>'+
     '<td style="color:var(--red)">'+tnp(T.unanswered)+'</td>'+
     '<td>'+rp(T.ans_rate)+tbar+'</td>'+
