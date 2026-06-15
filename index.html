@@ -636,15 +636,46 @@ tbody tr:hover .sticky{background:var(--card2)}
 
 <!-- ======= AGENTS ======= -->
 <div class="tab-content" id="tab-agents">
+
+  <!-- View Mode Toggle -->
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:var(--g);flex-wrap:wrap">
+    <span style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">View Mode:</span>
+    <div style="display:flex;gap:4px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:4px">
+      <button id="ag-mode-all" class="hm-btn active" onclick="setAgMode('all')" style="padding:5px 16px;font-size:12px">
+        📊 All Attempts
+      </button>
+      <button id="ag-mode-unique" class="hm-btn" onclick="setAgMode('unique')" style="padding:5px 16px;font-size:12px">
+        👤 Unique Numbers
+      </button>
+    </div>
+    <div id="ag-mode-desc" style="font-size:11px;color:var(--muted);padding:4px 12px;background:var(--card);border:1px solid var(--border);border-radius:6px">
+      Showing all call attempts — including repeated calls to same number
+    </div>
+    <!-- Quick stats -->
+    <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
+      <div style="background:rgba(20,174,195,.1);border:1px solid rgba(20,174,195,.3);border-radius:6px;padding:4px 12px;font-size:12px">
+        <span style="color:var(--muted)">Total Unique:</span> <span id="ag-total-unique" style="color:var(--cyan);font-weight:700">—</span>
+      </div>
+      <div style="background:rgba(248,159,80,.1);border:1px solid rgba(248,159,80,.3);border-radius:6px;padding:4px 12px;font-size:12px">
+        <span style="color:var(--muted)">Total Attempts:</span> <span id="ag-total-attempts" style="color:var(--orange);font-weight:700">—</span>
+      </div>
+      <div style="background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.3);border-radius:6px;padding:4px 12px;font-size:12px">
+        <span style="color:var(--muted)">Avg Attempts/Unique:</span> <span id="ag-dup-ratio" style="color:var(--green);font-weight:700">—</span>
+      </div>
+    </div>
+  </div>
+
   <div class="tcard">
-    <h3>Agent Performance <span class="cnt" id="ag-cnt"></span></h3>
+    <h3>Agent Performance <span class="cnt" id="ag-cnt"></span>
+      <span id="ag-mode-badge" style="margin-left:6px;background:rgba(20,174,195,.15);border:1px solid rgba(20,174,195,.4);color:var(--cyan);font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;text-transform:none;letter-spacing:0">All Attempts</span>
+    </h3>
     <div class="tbl-wrap"><table>
       <thead><tr>
         <th class="sticky" onclick="sa('agent')">Agent&#8597;</th>
         <th onclick="sa('dept')" style="color:#14AEC3">Department&#8597;</th>
         <th onclick="sa('lang')" style="color:#bc8cff">Language&#8597;</th>
-        <th onclick="sa('unique')" style="color:var(--cyan)">Unique&#8597;</th>
-        <th onclick="sa('total')" style="color:var(--muted)">Total Attempts&#8597;</th>
+        <th onclick="sa('unique')" style="color:var(--cyan)" id="th-unique">Unique #&#8597;</th>
+        <th onclick="sa('total')" id="th-total">Total Attempts&#8597;</th>
         <th onclick="sa('answered')">Answered&#8597;</th>
         <th onclick="sa('unanswered')">Unanswered&#8597;</th>
         <th onclick="sa('ans_rate')">Answer Rate&#8597;</th>
@@ -1362,6 +1393,29 @@ function renderAll(){
 //  DAILY ANSWERED CALLS REPORT
 // ============================================================
 let DAILY_SORT={col:'date',dir:1};
+let AG_MODE='all'; // 'all' = Total Attempts, 'unique' = Unique Numbers
+
+function setAgMode(mode){
+  AG_MODE=mode;
+  document.getElementById('ag-mode-all').classList.toggle('active',mode==='all');
+  document.getElementById('ag-mode-unique').classList.toggle('active',mode==='unique');
+  const badge=document.getElementById('ag-mode-badge');
+  const desc=document.getElementById('ag-mode-desc');
+  const thTotal=document.getElementById('th-total');
+  const thUnique=document.getElementById('th-unique');
+  if(mode==='unique'){
+    if(badge){badge.textContent='Unique Numbers';badge.style.background='rgba(20,174,195,.15)';badge.style.color='var(--cyan)';}
+    if(desc)desc.textContent='Showing unique phone numbers only — repeated calls to same number counted once';
+    if(thTotal)thTotal.style.opacity='0.4';
+    if(thUnique)thUnique.style.fontWeight='800';
+  } else {
+    if(badge){badge.textContent='All Attempts';badge.style.background='rgba(248,159,80,.15)';badge.style.color='var(--orange)';}
+    if(desc)desc.textContent='Showing all call attempts — including repeated calls to same number';
+    if(thTotal)thTotal.style.opacity='1';
+    if(thUnique)thUnique.style.fontWeight='normal';
+  }
+  renderAgTable();
+}
 let DAILY_DATA=[];
 
 function buildDailyAnsweredReport(){
@@ -1732,25 +1786,42 @@ function renderAgTable(){
   const typeFilter=(document.getElementById('f-type')?.value||'').trim();
   const deptFilter=(document.getElementById('f-dept')?.value||'').trim();
   const data=[...AG].filter(a=>(!langFilter||a.lang===langFilter)&&(!typeFilter||a.type===typeFilter)&&(!deptFilter||a.dept===deptFilter)).sort((a,b)=>{const av=a[AG_SORT.col]??'',bv=b[AG_SORT.col]??'';return typeof av==='number'?(av-bv)*AG_SORT.dir:String(av).localeCompare(String(bv))*AG_SORT.dir});
+  // Update quick stats bar
+  const totalUniq=data.reduce((s,a)=>s+a.unique,0);
+  const totalAtt=data.reduce((s,a)=>s+a.total,0);
+  const el_u=document.getElementById('ag-total-unique');
+  const el_a=document.getElementById('ag-total-attempts');
+  const el_r=document.getElementById('ag-dup-ratio');
+  if(el_u)el_u.textContent=totalUniq.toLocaleString();
+  if(el_a)el_a.textContent=totalAtt.toLocaleString();
+  if(el_r)el_r.textContent=totalUniq>0?'×'+(totalAtt/totalUniq).toFixed(2):'—';
+
   setText('ag-cnt',data.length+' agents');
   const body=document.getElementById('ag-body');
   if(!data.length){body.innerHTML='<tr><td colspan="14" style="text-align:center;color:var(--muted);padding:20px">No agents match filters</td></tr>';return;}
 
   const rp=(v)=>{const c=v>=60?'rhi':v>=40?'rmd':'rlo';return'<span class="rate-pill '+c+'">'+v+'%</span>'};
+  const isUniq=AG_MODE==='unique';
 
   const rows=data.map(a=>{
+    // In unique mode: base = unique count, answered/unanswered capped to unique
+    const base=isUniq?a.unique:a.total;
     const bar='<div class="pbar"><div class="pfill" style="width:'+a.ans_rate+'%"></div></div>';
-    const pct=(v)=>a.total?+(v/a.total*100).toFixed(1):0;
+    const pct=(v)=>base?+(v/base*100).toFixed(1):0;
     const np=(v)=>v+'<span style="color:var(--muted);font-size:10px;margin-left:3px">('+pct(v)+'%)</span>';
     const langBadge=a.lang?'<span style="background:rgba(188,140,255,.13);border:1px solid rgba(188,140,255,.3);color:#bc8cff;font-size:10px;font-weight:600;padding:1px 7px;border-radius:20px;white-space:nowrap">'+esc(a.lang)+'</span>':'<span style="color:var(--muted);font-size:11px">—</span>';
     const dupRatio=a.unique>0?+(a.total/a.unique).toFixed(1):1;
-    const uniqueBadge='<span style="color:var(--cyan);font-weight:700">'+a.unique+'</span>'+(a.unique!==a.total?'<span style="color:var(--muted);font-size:10px;margin-left:3px">(×'+dupRatio+')</span>':'');
-    return'<tr>'+
+    // Unique cell — highlighted in unique mode
+    const uniqueStyle=isUniq?'color:var(--cyan);font-weight:800;font-size:14px':'color:var(--cyan);font-weight:700';
+    const uniqueBadge='<span style="'+uniqueStyle+'">'+a.unique+'</span>'+(a.unique!==a.total?'<span style="color:var(--muted);font-size:10px;margin-left:4px">×'+dupRatio+'</span>':'');
+    // Total attempts cell — dimmed in unique mode
+    const totalStyle=isUniq?'color:var(--muted);font-size:11px':'font-weight:700;color:var(--text)';
+    return'<tr style="'+(isUniq?'background:rgba(20,174,195,.03)':'')+'">'+
       '<td class="sticky" style="font-weight:700">'+esc(a.agent)+'</td>'+
       '<td>'+deptBadge(a.dept)+'</td>'+
       '<td>'+langBadge+'</td>'+
-      '<td>'+uniqueBadge+'</td>'+
-      '<td style="font-weight:700;color:var(--muted)">'+a.total+'</td>'+
+      '<td style="'+(isUniq?'background:rgba(20,174,195,.07);border-left:2px solid rgba(20,174,195,.4)':'')+'">'+uniqueBadge+'</td>'+
+      '<td style="'+totalStyle+'">'+a.total+(isUniq?'<span style="color:var(--muted);font-size:10px;margin-left:3px">attempts</span>':'')+'</td>'+
       '<td style="color:var(--green)">'+np(a.answered)+'</td>'+
       '<td style="color:var(--red)">'+np(a.unanswered)+'</td>'+
       '<td>'+rp(a.ans_rate)+bar+'</td>'+
@@ -1766,6 +1837,7 @@ function renderAgTable(){
   // ── Totals row ──
   const T={
     total:     data.reduce((s,a)=>s+a.total,0),
+    unique:    data.reduce((s,a)=>s+a.unique,0),
     answered:  data.reduce((s,a)=>s+a.answered,0),
     unanswered:data.reduce((s,a)=>s+a.unanswered,0),
     completed: data.reduce((s,a)=>s+a.completed,0),
@@ -1773,21 +1845,22 @@ function renderAgTable(){
     wrong:     data.reduce((s,a)=>s+a.wrong,0),
     timed_out: data.reduce((s,a)=>s+a.timed_out,0),
   };
-  T.ans_rate=T.total?Math.round(T.answered/T.total*100):0;
+  const Tbase=isUniq?T.unique:T.total;
+  T.ans_rate=Tbase?Math.round(T.answered/Tbase*100):0;
   const talkAgents=data.filter(a=>a.avg_talk_s>0);
   T.avg_talk_s=talkAgents.length?Math.round(talkAgents.reduce((s,a)=>s+a.avg_talk_s,0)/talkAgents.length):0;
   T.avg_talk=sfmt(T.avg_talk_s);
   const sentAgents=data.filter(a=>a.avg_sent!=null);
   T.avg_sent=sentAgents.length?+(sentAgents.reduce((s,a)=>s+a.avg_sent,0)/sentAgents.length).toFixed(1):null;
-  const tp=(v)=>T.total?+(v/T.total*100).toFixed(1):0;
+  const tp=(v)=>Tbase?+(v/Tbase*100).toFixed(1):0;
   const tnp=(v)=>v+'<span style="color:var(--muted);font-size:10px;margin-left:3px">('+tp(v)+'%)</span>';
   const tbar='<div class="pbar"><div class="pfill" style="width:'+T.ans_rate+'%;background:var(--orange)"></div></div>';
   const totalsRow='<tr style="background:rgba(210,153,34,.08);border-top:2px solid var(--orange);font-weight:700">'+
     '<td class="sticky" style="font-weight:800;color:var(--orange)">TOTAL ('+data.length+')</td>'+
     '<td style="color:var(--muted);font-size:11px">All</td>'+
     '<td style="color:var(--muted);font-size:11px">All</td>'+
-    '<td style="color:var(--cyan);font-weight:800">'+data.reduce((s,a)=>s+a.unique,0)+'</td>'+
-    '<td style="font-weight:800;color:var(--muted)">'+T.total+'</td>'+
+    '<td style="color:var(--cyan);font-weight:800;'+(isUniq?'background:rgba(20,174,195,.07);border-left:2px solid rgba(20,174,195,.4)':'')+'">'+T.unique+'</td>'+
+    '<td style="font-weight:800;color:'+(isUniq?'var(--muted)':'var(--orange)')+'">'+T.total+'</td>'+
     '<td style="color:var(--green)">'+tnp(T.answered)+'</td>'+
     '<td style="color:var(--red)">'+tnp(T.unanswered)+'</td>'+
     '<td>'+rp(T.ans_rate)+tbar+'</td>'+
