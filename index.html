@@ -2022,7 +2022,7 @@ function buildAgHourHeatmap(){
   const mx=Math.max(...allVals,1);
 
   let html='<thead><tr><th style="padding:3px 8px;color:var(--muted);font-size:10px;text-align:right;white-space:nowrap">Agent \\ Hour</th>';
-  for(let h=0;h<24;h++){const ampm=h===0?'12am':h<12?h+'am':h===12?'12pm':(h-12)+'pm';html+='<th style="padding:2px 3px;color:var(--muted);font-size:9px;text-align:center;min-width:24px;white-space:nowrap">'+(h%3===0?ampm:'')+'</th>';}
+  for(let h=0;h<24;h++){const ampm=h===0?'12am':h<12?h+'am':h===12?'12pm':(h-12)+'pm';html+='<th style="padding:2px 3px;color:var(--muted);font-size:9px;text-align:center;min-width:24px;white-space:nowrap">'+ampm+'</th>';}
   html+='</tr></thead><tbody>';
 
   agents.forEach(ag=>{
@@ -2273,7 +2273,7 @@ function toggleAgExpand(agId,agentName){
           <table style="border-collapse:separate;border-spacing:2px;font-size:10px">
             <thead><tr>
               <th style="color:var(--muted);font-size:10px;padding:2px 5px;text-align:right;white-space:nowrap">Hour →</th>
-              ${Array.from({length:24},(_,h)=>{const ampm=h===0?'12am':h<12?h+'am':h===12?'12pm':(h-12)+'pm';return'<th style="color:var(--muted);font-size:9px;text-align:center;padding:2px 3px;white-space:nowrap">'+(h%3===0?ampm:'')+'</th>'}).join('')}
+              ${Array.from({length:24},(_,h)=>{const ampm=h===0?'12am':h<12?h+'am':h===12?'12pm':(h-12)+'pm';return'<th style="color:var(--muted);font-size:9px;text-align:center;padding:2px 3px;white-space:nowrap">'+ampm+'</th>'}).join('')}
             </tr></thead>
             <tbody><tr>
               <th style="color:var(--text);font-size:10px;text-align:right;padding:2px 8px;white-space:nowrap">${esc(agentName.split(' ')[0])}</th>
