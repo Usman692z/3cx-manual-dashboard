@@ -2236,7 +2236,7 @@ function toggleAgExpand(agId,agentName){
   // Build mini heatmap + table HTML
   const hmCells=Array.from({length:24},(_,h)=>{
     const d=hrData[h];
-    if(!d.t)return'<td style="padding:3px 5px;font-size:10px;text-align:center;background:rgba(139,148,158,.08);border-radius:3px;color:var(--muted)">0</td>';
+    if(!d.t)return'<td style="padding:3px 5px;font-size:10px;text-align:center;background:rgba(139,148,158,.15);border-radius:3px;color:#5b7491;border:1px solid rgba(139,148,158,.2)">0</td>';
     const pct=d.t/mx;
     const r2=Math.round(d.t*220),g2=Math.round(d.t*100);
     const bg='rgba('+r2+','+g2+',0,0.85)';
