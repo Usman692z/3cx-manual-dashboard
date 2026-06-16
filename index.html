@@ -472,6 +472,7 @@ tbody tr:hover .sticky{background:var(--card2)}
   <label>To</label><input type="time" id="f-time-to" onchange="applyFilters()" style="background:var(--card2);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:6px;font-size:13px;outline:none;font-family:inherit">
   <div class="fsep"></div>
   <button class="btn" onclick="quickFilter('today')" style="background:rgba(63,185,80,.15);border-color:var(--green);color:var(--green);font-weight:700">Today</button>
+  <button class="btn" onclick="quickFilter('yesterday')" style="background:rgba(88,166,255,.12);border-color:var(--blue);color:var(--blue);font-weight:700">Yesterday</button>
   <button class="btn" onclick="quickFilter('month')" style="background:rgba(210,153,34,.1);border-color:var(--orange);color:var(--orange);font-weight:700">This Month</button>
   <button class="btn" onclick="clearF()" style="margin-left:2px">Clear</button>
 </div>
@@ -3152,11 +3153,18 @@ function quickFilter(mode){
   const fFrom=document.getElementById('f-from');
   const fTo=document.getElementById('f-to');
   if(!fFrom||!fTo)return;
+  const yest=new Date(now); yest.setDate(yest.getDate()-1);
+  const yesterday=yest.getFullYear()+'-'+pad(yest.getMonth()+1)+'-'+pad(yest.getDate());
   if(mode==='today'){
     fFrom.value=today; fTo.value=today;
     applyFilters();
     const n=FILT.length;
-    toast(n>0?'Today ('+today+'): '+n+' calls':'Today ('+today+'): no calls in loaded data — your CSV may not include today','warn');
+    toast(n>0?'Today ('+today+'): '+n+' calls':'Today ('+today+'): no calls in loaded data','warn');
+  } else if(mode==='yesterday'){
+    fFrom.value=yesterday; fTo.value=yesterday;
+    applyFilters();
+    const n=FILT.length;
+    toast(n>0?'Yesterday ('+yesterday+'): '+n+' calls':'Yesterday ('+yesterday+'): no calls in loaded data','warn');
   } else {
     fFrom.value=monthStart; fTo.value=today;
     applyFilters();
