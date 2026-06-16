@@ -699,6 +699,48 @@ tbody tr:hover .sticky{background:var(--card2)}
   <div class="chart-grid g1">
     <div class="chart-card"><h3>Answered / Unanswered by Agent</h3><canvas id="ch-ag-stk" style="max-height:260px"></canvas></div>
   </div>
+  <!-- ── AGENT DRILL-DOWN PANEL ── -->
+  <div id="agent-drill" style="display:none;margin-top:var(--g)">
+    <div class="tcard" style="border-color:var(--primary);box-shadow:0 0 0 1px var(--primary)33">
+      <h3 style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span id="drill-name" style="color:var(--primary);font-size:14px">—</span>
+        <span id="drill-dept"></span>
+        <span id="drill-lang"></span>
+        <button onclick="closeDrill()" style="margin-left:auto;background:rgba(248,81,73,.12);border:1px solid rgba(248,81,73,.4);color:#ff9090;padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-family:inherit">✕ Close</button>
+      </h3>
+
+      <!-- KPI mini row -->
+      <div id="drill-kpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:14px"></div>
+
+      <!-- Charts -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--g);margin-bottom:var(--g)" class="g2">
+        <div class="chart-card" style="margin:0">
+          <h3>Calls by Hour</h3>
+          <canvas id="ch-drill-hr" style="max-height:200px"></canvas>
+        </div>
+        <div class="chart-card" style="margin:0">
+          <h3>Calls by Day of Week</h3>
+          <canvas id="ch-drill-wd" style="max-height:200px"></canvas>
+        </div>
+      </div>
+
+      <!-- Hourly table -->
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead><tr>
+            <th style="padding:7px 10px;border-bottom:1px solid var(--border);color:var(--muted);text-align:left">Hour</th>
+            <th style="padding:7px 10px;border-bottom:1px solid var(--border);color:var(--blue);text-align:right">Total</th>
+            <th style="padding:7px 10px;border-bottom:1px solid var(--green);color:var(--green);text-align:right">Answered</th>
+            <th style="padding:7px 10px;border-bottom:1px solid var(--border);color:var(--red);text-align:right">Unanswered</th>
+            <th style="padding:7px 10px;border-bottom:1px solid var(--border);color:var(--orange);text-align:right">Answer Rate</th>
+            <th style="padding:7px 10px;border-bottom:1px solid var(--border);color:var(--muted);text-align:left;min-width:120px">Volume</th>
+          </tr></thead>
+          <tbody id="drill-hr-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
 </div><!-- /agents -->
 
 <!-- ======= DEEP ANALYSIS ======= -->
@@ -1828,8 +1870,8 @@ function renderAgTable(){
     const uniqueBadge='<span style="'+uniqueStyle+'">'+a.unique+'</span>'+(a.unique!==a.total?'<span style="color:var(--muted);font-size:10px;margin-left:4px">×'+dupRatio+'</span>':'');
     // Total attempts cell — dimmed in unique mode
     const totalStyle=isUniq?'color:var(--muted);font-size:11px':'font-weight:700;color:var(--text)';
-    return'<tr style="'+(isUniq?'background:rgba(20,174,195,.03)':'')+'">'+
-      '<td class="sticky" style="font-weight:700">'+esc(a.agent)+'</td>'+
+    return'<tr style="cursor:pointer;'+(isUniq?'background:rgba(20,174,195,.03)':'')+'\" onclick="openDrill(\''+esc(a.agent).replace(/'/g,'&#39;')+'\')" title="Click to see hourly breakdown">'+
+      '<td class="sticky" style="font-weight:700">'+esc(a.agent)+' <span style="color:var(--muted);font-size:10px">📊</span></td>'+
       '<td>'+deptBadge(a.dept)+'</td>'+
       '<td>'+langBadge+'</td>'+
       '<td style="'+(isUniq?'background:rgba(20,174,195,.07);border-left:2px solid rgba(20,174,195,.4)':'')+'">'+uniqueBadge+'</td>'+
@@ -1903,6 +1945,120 @@ function buildAgCharts(){
   mkChart('ch-ag-stk',{type:'bar',data:{labels:agents,datasets:[{label:'Answered',data:AG.map(a=>a.answered),backgroundColor:'rgba(63,185,80,.75)',stack:'s',borderWidth:0},{label:'Unanswered',data:AG.map(a=>a.unanswered),backgroundColor:'rgba(248,81,73,.55)',stack:'s',borderWidth:0},{label:'Waiting',data:AG.map(a=>a.waiting),backgroundColor:'rgba(227,179,65,.55)',stack:'s',borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
     plugins:{datalabels:DL_OFF,legend:{position:'top',labels:{usePointStyle:true,padding:12,color:C.text}}},
     scales:{x:{grid:{display:false},ticks:{color:C.text}},y:{beginAtZero:true,grid:{color:C.grid},ticks:{color:C.text},stacked:true}}}});
+}
+
+// ============================================================
+//  AGENT DRILL-DOWN
+// ============================================================
+let DRILL_AGENT=null;
+
+function openDrill(agentName){
+  // If same agent clicked again, close it
+  if(DRILL_AGENT===agentName){closeDrill();return;}
+  DRILL_AGENT=agentName;
+
+  const panel=document.getElementById('agent-drill');
+  panel.style.display='block';
+  panel.scrollIntoView({behavior:'smooth',block:'start'});
+
+  // Filter rows for this agent
+  const rows=FILT.filter(r=>agentOf(r)===agentName);
+
+  // Agent meta
+  const ext=agentExt(agentName);
+  const meta=ext&&AGENTS[ext]?AGENTS[ext]:{dept:'',lang:''};
+  document.getElementById('drill-name').textContent='📊 '+agentName;
+  document.getElementById('drill-dept').innerHTML=deptBadge(meta.dept);
+  document.getElementById('drill-lang').innerHTML=meta.lang
+    ?'<span style="background:rgba(188,140,255,.13);border:1px solid rgba(188,140,255,.3);color:#bc8cff;font-size:10px;font-weight:600;padding:1px 8px;border-radius:20px">'+esc(meta.lang)+'</span>':'';
+
+  // Stats
+  const total=rows.length;
+  const ans=rows.filter(r=>r['Status']==='Answered').length;
+  const unans=rows.filter(r=>r['Status']==='Unanswered').length;
+  const comp=rows.filter(r=>r._result==='Completed Call').length;
+  const rate=total?Math.round(ans/total*100):0;
+  const talkRows=rows.filter(r=>r._ts>0);
+  const avgTalk=talkRows.length?sfmt(talkRows.reduce((s,r)=>s+r._ts,0)/talkRows.length):'—';
+  const nums=new Set(rows.map(r=>{
+    const dir=(r['Direction']||'').trim();
+    return(dir==='Outbound'?(r['To']||''):(r['From']||'')).trim().replace(/\D/g,'');
+  }).filter(Boolean));
+
+  const rateCls=rate>=60?'var(--green)':rate>=40?'var(--orange)':'var(--red)';
+  document.getElementById('drill-kpis').innerHTML=`
+    <div class="kpi bl" style="padding:10px 12px"><div class="kpi-lbl">Total Attempts</div><div class="kpi-val" style="font-size:22px">${total}</div></div>
+    <div class="kpi cy" style="padding:10px 12px"><div class="kpi-lbl">Unique Numbers</div><div class="kpi-val" style="font-size:22px;color:var(--cyan)">${nums.size}</div></div>
+    <div class="kpi gr" style="padding:10px 12px"><div class="kpi-lbl">Answered</div><div class="kpi-val" style="font-size:22px;color:var(--green)">${ans}</div></div>
+    <div class="kpi rd" style="padding:10px 12px"><div class="kpi-lbl">Unanswered</div><div class="kpi-val" style="font-size:22px;color:var(--red)">${unans}</div></div>
+    <div class="kpi or" style="padding:10px 12px"><div class="kpi-lbl">Answer Rate</div><div class="kpi-val" style="font-size:22px;color:${rateCls}">${rate}%</div></div>
+    <div class="kpi gr" style="padding:10px 12px"><div class="kpi-lbl">Completed</div><div class="kpi-val" style="font-size:22px;color:var(--green)">${comp}</div></div>
+    <div class="kpi pu" style="padding:10px 12px"><div class="kpi-lbl">Avg Talk</div><div class="kpi-val" style="font-size:22px">${avgTalk}</div></div>
+  `;
+
+  // Hourly breakdown
+  const hrData=Array.from({length:24},(_,h)=>({h,total:0,ans:0,unans:0}));
+  rows.forEach(r=>{
+    const h=r._hour;
+    if(h>=0&&h<24){hrData[h].total++;if(r['Status']==='Answered')hrData[h].ans++;if(r['Status']==='Unanswered')hrData[h].unans++;}
+  });
+  const active=hrData.filter(d=>d.total>0);
+  const maxH=Math.max(...hrData.map(d=>d.total),1);
+
+  // Hourly table
+  const tbody=document.getElementById('drill-hr-body');
+  tbody.innerHTML=active.map(d=>{
+    const r2=d.total?Math.round(d.ans/d.total*100):0;
+    const rc=r2>=60?'var(--green)':r2>=40?'var(--orange)':'var(--red)';
+    const barW=Math.round(d.total/maxH*100);
+    const label=d.h<10?'0'+d.h+':00':d.h+':00';
+    const isPeak=d.total===maxH;
+    return`<tr style="${isPeak?'background:rgba(248,159,80,.07)':''}">
+      <td style="padding:6px 10px;font-weight:${isPeak?'700':'400'};color:${isPeak?'var(--primary)':'var(--text)'}">${label}${isPeak?' ⭐':''}</td>
+      <td style="padding:6px 10px;text-align:right;font-weight:700;color:var(--blue)">${d.total}</td>
+      <td style="padding:6px 10px;text-align:right;color:var(--green)">${d.ans}</td>
+      <td style="padding:6px 10px;text-align:right;color:var(--red)">${d.unans}</td>
+      <td style="padding:6px 10px;text-align:right;font-weight:700;color:${rc}">${r2}%</td>
+      <td style="padding:6px 10px">
+        <div style="display:flex;align-items:center;gap:6px">
+          <div style="flex:1;height:8px;background:var(--border);border-radius:4px;overflow:hidden">
+            <div style="width:${barW}%;height:100%;background:${isPeak?'var(--primary)':'var(--cyan)'};border-radius:4px"></div>
+          </div>
+          <span style="font-size:10px;color:var(--muted);width:28px">${barW}%</span>
+        </div>
+      </td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:16px">No data</td></tr>';
+
+  // Charts
+  if(window.Chart){
+    const C=chartColors();
+    const labels=hrData.filter(d=>d.total>0).map(d=>(d.h<10?'0'+d.h:d.h)+':00');
+    const aData=hrData.filter(d=>d.total>0).map(d=>d.ans);
+    const uData=hrData.filter(d=>d.total>0).map(d=>d.unans);
+    mkChart('ch-drill-hr',{type:'bar',data:{labels,datasets:[
+      {label:'Answered',data:aData,backgroundColor:'rgba(16,219,160,.75)',borderRadius:3,borderWidth:0,stack:'s'},
+      {label:'Unanswered',data:uData,backgroundColor:'rgba(255,68,96,.5)',borderRadius:3,borderWidth:0,stack:'s'},
+    ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{position:'top',labels:{usePointStyle:true,padding:12,color:C.text}},datalabels:{display:false}},
+      scales:{x:{grid:{display:false},ticks:{color:C.text}},y:{beginAtZero:true,grid:{color:C.grid},ticks:{color:C.text},stacked:true}}}});
+
+    const WDS=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+    const wdA={},wdU={};
+    WDS.forEach(w=>{wdA[w]=0;wdU[w]=0});
+    rows.forEach(r=>{if(wdA[r._wd]!==undefined){if(r['Status']==='Answered')wdA[r._wd]++;else wdU[r._wd]++;}});
+    mkChart('ch-drill-wd',{type:'bar',data:{labels:WDS,datasets:[
+      {label:'Answered',data:WDS.map(w=>wdA[w]),backgroundColor:'rgba(16,219,160,.75)',borderRadius:3,borderWidth:0,stack:'s'},
+      {label:'Unanswered',data:WDS.map(w=>wdU[w]),backgroundColor:'rgba(255,68,96,.5)',borderRadius:3,borderWidth:0,stack:'s'},
+    ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{display:false},datalabels:{display:false}},
+      scales:{x:{grid:{display:false},ticks:{color:C.text}},y:{beginAtZero:true,grid:{color:C.grid},ticks:{color:C.text},stacked:true}}}});
+  }
+}
+
+function closeDrill(){
+  DRILL_AGENT=null;
+  document.getElementById('agent-drill').style.display='none';
 }
 
 // ============================================================
