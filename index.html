@@ -468,6 +468,9 @@ tbody tr:hover .sticky{background:var(--card2)}
   <div class="fsep"></div>
   <label>Search</label><input type="text" id="f-search" placeholder="Number..." oninput="debounce()">
   <div class="fsep"></div>
+  <label>⏰ Time From</label><input type="time" id="f-time-from" onchange="applyFilters()" style="background:var(--card2);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:6px;font-size:13px;outline:none;font-family:inherit">
+  <label>To</label><input type="time" id="f-time-to" onchange="applyFilters()" style="background:var(--card2);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:6px;font-size:13px;outline:none;font-family:inherit">
+  <div class="fsep"></div>
   <button class="btn" onclick="quickFilter('today')" style="background:rgba(63,185,80,.15);border-color:var(--green);color:var(--green);font-weight:700">Today</button>
   <button class="btn" onclick="quickFilter('month')" style="background:rgba(210,153,34,.1);border-color:var(--orange);color:var(--orange);font-weight:700">This Month</button>
   <button class="btn" onclick="clearF()" style="margin-left:2px">Clear</button>
@@ -1282,6 +1285,8 @@ function applyFilters(){
   const type=document.getElementById('f-type').value;
   const dept=document.getElementById('f-dept').value;
   const q=document.getElementById('f-search').value.trim().toLowerCase();
+  const tFrom=document.getElementById('f-time-from').value; // "HH:MM"
+  const tTo=document.getElementById('f-time-to').value;
 
   FILT=RAW.filter(r=>{
     if(from&&r._date<from)return false;
@@ -1297,6 +1302,13 @@ function applyFilters(){
     if(type&&agentType(agentOf(r))!==type)return false;
     if(dept&&agentDept(agentOf(r))!==dept)return false;
     if(q){const fr=(r['From']||'').toLowerCase(),tt=(r['To']||'').toLowerCase();if(!fr.includes(q)&&!tt.includes(q))return false}
+    if(tFrom||tTo){
+      const ct=(r['Call Time']||'').toString();
+      const timePart=ct.includes('T')?ct.split('T')[1]?.slice(0,5):ct.slice(11,16);
+      if(!timePart)return false;
+      if(tFrom&&timePart<tFrom)return false;
+      if(tTo&&timePart>tTo)return false;
+    }
     return true;
   });
   renderAll();
@@ -1305,7 +1317,7 @@ function applyFilters(){
 function debounce(){clearTimeout(FT);FT=setTimeout(applyFilters,350)}
 
 function clearF(){
-  ['f-from','f-to','f-search'].forEach(id=>document.getElementById(id).value='');
+  ['f-from','f-to','f-search','f-time-from','f-time-to'].forEach(id=>document.getElementById(id).value='');
   ['f-dir','f-status','f-result','f-sent','f-lang','f-type','f-dept'].forEach(id=>document.getElementById(id).value='');
   SEL_AGENTS.clear(); msTriggerUpdate();
   // Also reset the header quick filter
