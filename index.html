@@ -755,6 +755,30 @@ tbody tr:hover .sticky{background:var(--card2)}
     </div>
     <div class="hm-wrap"><table class="hm-table" id="hm-tbl"></table></div>
     <div class="hm-legend"><span>Low</span><div class="hm-legend-bar" id="hm-leg"></div><span>High</span></div>
+
+    <!-- Heatmap Drill-Down Panel -->
+    <div id="hm-drill" style="display:none;margin-top:14px;border-top:2px solid var(--primary);padding-top:14px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+        <span id="hm-drill-title" style="font-size:14px;font-weight:800;color:var(--primary)">—</span>
+        <div id="hm-drill-kpis" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+        <button onclick="document.getElementById('hm-drill').style.display='none'" style="margin-left:auto;background:rgba(248,81,73,.12);border:1px solid rgba(248,81,73,.4);color:#ff9090;padding:3px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-family:inherit">✕ Close</button>
+      </div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead><tr>
+            <th style="padding:6px 10px;border-bottom:1px solid var(--border);color:var(--muted);text-align:left;white-space:nowrap">Time</th>
+            <th style="padding:6px 10px;border-bottom:1px solid var(--border);color:var(--muted);text-align:left">Agent</th>
+            <th style="padding:6px 10px;border-bottom:1px solid var(--border);color:var(--muted);text-align:left">From</th>
+            <th style="padding:6px 10px;border-bottom:1px solid var(--border);color:var(--muted);text-align:left">To</th>
+            <th style="padding:6px 10px;border-bottom:1px solid var(--border);color:var(--muted)">Direction</th>
+            <th style="padding:6px 10px;border-bottom:1px solid var(--border);color:var(--green)">Status</th>
+            <th style="padding:6px 10px;border-bottom:1px solid var(--border);color:var(--muted)">Result</th>
+            <th style="padding:6px 10px;border-bottom:1px solid var(--border);color:var(--muted)">Talk</th>
+          </tr></thead>
+          <tbody id="hm-drill-body"></tbody>
+        </table>
+      </div>
+    </div>
   </div>
   <div class="chart-grid g2">
     <div class="chart-card"><h3>Weekday — Result Mix</h3><canvas id="ch-wd-stk" style="max-height:280px"></canvas></div>
@@ -2089,7 +2113,7 @@ function buildHeatmap(){
       const pct=v/mx;
       const bg=HM_MODE==='rate'?rateCol(v):heatCol(pct);
       const fg=pct>0.45?'#fff':'#8b949e';
-      html+='<td class="hm-cell" style="background:'+bg+';color:'+fg+'" title="'+w+' '+h+':00 — '+(HM_MODE==='rate'?v+'%':v)+'">'+(v||'')+'</td>';
+      html+='<td class="hm-cell" style="background:'+bg+';color:'+fg+';cursor:'+(v?'pointer':'default')+'" title="'+w+' '+h+':00 — '+(HM_MODE==='rate'?v+'%':v)+'" onclick="'+(v?'openHmDrill(\''+w+'\','+h+')':'')+'">'+(v||'')+'</td>';
     }
     html+='</tr>';
   });
@@ -2101,6 +2125,45 @@ function buildHeatmap(){
 
 function heatCol(t){t=Math.max(0,Math.min(1,t));if(t===0)return'#161b22';const r=Math.round(t*220),g2=Math.round(t*100);return'rgba('+r+','+g2+',0,0.85)'}
 function rateCol(p){return p===0?'#161b22':p<40?'rgba(248,81,73,.65)':p<60?'rgba(210,153,34,.7)':'rgba(63,185,80,.65)'}
+
+function openHmDrill(wd,h){
+  const panel=document.getElementById('hm-drill');
+  const rows=FILT.filter(r=>r._wd===wd&&r._hour===h);
+  if(!rows.length)return;
+
+  const hLabel=(h<10?'0'+h:h)+':00 – '+(h<9?'0'+(h+1):(h+1))+':00';
+  document.getElementById('hm-drill-title').textContent='📍 '+wd+' · '+hLabel+' ('+rows.length+' calls)';
+
+  const ans=rows.filter(r=>r['Status']==='Answered').length;
+  const unans=rows.filter(r=>r['Status']==='Unanswered').length;
+  const rate=rows.length?Math.round(ans/rows.length*100):0;
+  const rc=rate>=60?'var(--green)':rate>=40?'var(--orange)':'var(--red)';
+  document.getElementById('hm-drill-kpis').innerHTML=
+    '<span style="background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.3);color:var(--blue);font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px">Total: '+rows.length+'</span>'+
+    '<span style="background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:var(--green);font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px">✔ Answered: '+ans+'</span>'+
+    '<span style="background:rgba(248,81,73,.12);border:1px solid rgba(248,81,73,.3);color:var(--red);font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px">✘ Unanswered: '+unans+'</span>'+
+    '<span style="background:rgba(248,159,80,.12);border:1px solid rgba(248,159,80,.3);font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;color:'+rc+'">Rate: '+rate+'%</span>';
+
+  const sorted=[...rows].sort((a,b)=>a._dt-b._dt);
+  document.getElementById('hm-drill-body').innerHTML=sorted.map(r=>{
+    const isAns=r['Status']==='Answered';
+    const ct=(r['Call Time']||'').toString();
+    const timeOnly=ct.includes('T')?ct.split('T')[1]?.slice(0,8):ct.slice(11,19);
+    return'<tr style="border-bottom:1px solid rgba(48,54,61,.4);'+(isAns?'':'opacity:.75')+'">'+
+      '<td style="padding:5px 10px;color:var(--muted);white-space:nowrap;font-size:11px">'+esc(timeOnly||ct.slice(0,19))+'</td>'+
+      '<td style="padding:5px 10px;font-weight:600;white-space:nowrap">'+esc(agentOf(r)||'—')+'</td>'+
+      '<td style="padding:5px 10px;color:var(--muted);white-space:nowrap;max-width:130px;overflow:hidden;text-overflow:ellipsis">'+esc(r['From']||'—')+'</td>'+
+      '<td style="padding:5px 10px;color:var(--muted);white-space:nowrap;max-width:130px;overflow:hidden;text-overflow:ellipsis">'+esc(r['To']||'—')+'</td>'+
+      '<td style="padding:5px 10px;text-align:center">'+dirTag(r['Direction']||'')+'</td>'+
+      '<td style="padding:5px 10px;text-align:center">'+stTag(r['Status']||'')+'</td>'+
+      '<td style="padding:5px 10px;text-align:center">'+crTag(r._result)+'</td>'+
+      '<td style="padding:5px 10px;text-align:right;color:'+(r._ts>0?'var(--text)':'var(--muted)')+'">'+esc(r['Talking']||'—')+'</td>'+
+    '</tr>';
+  }).join('');
+
+  panel.style.display='block';
+  panel.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
 
 function buildWdStk(){
   if(!window.Chart)return;
