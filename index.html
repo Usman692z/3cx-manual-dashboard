@@ -699,6 +699,46 @@ tbody tr:hover .sticky{background:var(--card2)}
   <div class="chart-grid g1">
     <div class="chart-card"><h3>Answered / Unanswered by Agent</h3><canvas id="ch-ag-stk" style="max-height:260px"></canvas></div>
   </div>
+
+  <!-- ── AGENT × HOUR HEATMAP ── -->
+  <div class="tcard" style="margin-bottom:var(--g)">
+    <h3>Agent × Hour Heatmap
+      <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted);font-size:11px">— click any cell to see calls</span>
+      <div style="display:inline-flex;gap:4px;margin-left:12px">
+        <button class="hm-btn active" id="agh-total" onclick="setAgHm('total')" style="padding:3px 10px;font-size:10px">Total</button>
+        <button class="hm-btn" id="agh-ans"   onclick="setAgHm('ans')"   style="padding:3px 10px;font-size:10px">Answered</button>
+        <button class="hm-btn" id="agh-rate"  onclick="setAgHm('rate')"  style="padding:3px 10px;font-size:10px">Rate %</button>
+      </div>
+    </h3>
+    <div style="overflow-x:auto">
+      <table id="agh-tbl" style="border-collapse:separate;border-spacing:2px;font-size:11px;min-width:700px"></table>
+    </div>
+    <div class="hm-legend" style="margin-top:6px"><span>Low</span><div class="hm-legend-bar" id="agh-leg"></div><span>High</span></div>
+
+    <!-- Agent-Hour Drill popup -->
+    <div id="agh-drill" style="display:none;margin-top:12px;border-top:2px solid var(--primary);padding-top:12px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
+        <span id="agh-drill-title" style="font-size:13px;font-weight:800;color:var(--primary)">—</span>
+        <div id="agh-drill-badges" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+        <button onclick="document.getElementById('agh-drill').style.display='none'" style="margin-left:auto;background:rgba(248,81,73,.12);border:1px solid rgba(248,81,73,.4);color:#ff9090;padding:3px 10px;border-radius:6px;cursor:pointer;font-size:11px;font-family:inherit">✕</button>
+      </div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead><tr>
+            <th style="padding:5px 10px;border-bottom:1px solid var(--border);color:var(--muted);text-align:left">Time</th>
+            <th style="padding:5px 10px;border-bottom:1px solid var(--border);color:var(--muted);text-align:left">From</th>
+            <th style="padding:5px 10px;border-bottom:1px solid var(--border);color:var(--muted);text-align:left">To</th>
+            <th style="padding:5px 10px;border-bottom:1px solid var(--border);color:var(--muted)">Dir</th>
+            <th style="padding:5px 10px;border-bottom:1px solid var(--border);color:var(--green)">Status</th>
+            <th style="padding:5px 10px;border-bottom:1px solid var(--border);color:var(--muted)">Result</th>
+            <th style="padding:5px 10px;border-bottom:1px solid var(--border);color:var(--muted)">Talk</th>
+          </tr></thead>
+          <tbody id="agh-drill-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <!-- ── AGENT DRILL-DOWN PANEL ── -->
   <div id="agent-drill" style="display:none;margin-top:var(--g)">
     <div class="tcard" style="border-color:var(--primary);box-shadow:0 0 0 1px var(--primary)33">
@@ -1458,6 +1498,7 @@ function renderAll(){
   buildDailyAnsweredReport();
   buildAgData();renderAgTable();
   if(chartJsReady) buildAgCharts();
+  buildAgHourHeatmap();
   renderAnalysis();
   buildDeptSummary();
   PG=0;renderLog();
@@ -1894,8 +1935,9 @@ function renderAgTable(){
     const uniqueBadge='<span style="'+uniqueStyle+'">'+a.unique+'</span>'+(a.unique!==a.total?'<span style="color:var(--muted);font-size:10px;margin-left:4px">×'+dupRatio+'</span>':'');
     // Total attempts cell — dimmed in unique mode
     const totalStyle=isUniq?'color:var(--muted);font-size:11px':'font-weight:700;color:var(--text)';
-    return'<tr style="cursor:pointer;'+(isUniq?'background:rgba(20,174,195,.03)':'')+'\" onclick="openDrill(\''+esc(a.agent).replace(/'/g,'&#39;')+'\')" title="Click to see hourly breakdown">'+
-      '<td class="sticky" style="font-weight:700">'+esc(a.agent)+' <span style="color:var(--muted);font-size:10px">📊</span></td>'+
+    const agId='ag_'+a.agent.replace(/\W/g,'_');
+    return'<tr id="agr-'+agId+'" style="cursor:pointer;'+(isUniq?'background:rgba(20,174,195,.03)':'')+'\" onclick="toggleAgExpand(\''+agId+'\',\''+esc(a.agent).replace(/'/g,'&#39;')+'\')" title="Click to expand hourly report">'+
+      '<td class="sticky" style="font-weight:700">'+esc(a.agent)+' <span id="agr-arr-'+agId+'" style="color:var(--primary);font-size:11px;margin-left:4px">▶</span></td>'+
       '<td>'+deptBadge(a.dept)+'</td>'+
       '<td>'+langBadge+'</td>'+
       '<td style="'+(isUniq?'background:rgba(20,174,195,.07);border-left:2px solid rgba(20,174,195,.4)':'')+'">'+uniqueBadge+'</td>'+
@@ -1951,6 +1993,90 @@ function renderAgTable(){
   '</tr>';
 
   body.innerHTML=rows+totalsRow;
+}
+
+// ── Agent × Hour Heatmap ──
+let AGH_MODE='total';
+function setAgHm(m){
+  AGH_MODE=m;
+  ['total','ans','rate'].forEach(x=>document.getElementById('agh-'+x)?.classList.toggle('active',x===m));
+  buildAgHourHeatmap();
+}
+
+function buildAgHourHeatmap(){
+  const agents=[...new Set(FILT.map(agentOf).filter(isAgent))].sort();
+  if(!agents.length)return;
+  // Build grid: agent → hour → {t,a}
+  const grid={};
+  agents.forEach(ag=>{grid[ag]={};for(let h=0;h<24;h++)grid[ag][h]={t:0,a:0}});
+  FILT.forEach(r=>{
+    const ag=agentOf(r);if(!isAgent(ag))return;
+    const h=r._hour;if(h<0||h>23)return;
+    grid[ag][h].t++;
+    if(r['Status']==='Answered')grid[ag][h].a++;
+  });
+  // Global max for color scaling
+  let allVals=[];
+  agents.forEach(ag=>{for(let h=0;h<24;h++){const d=grid[ag][h];allVals.push(AGH_MODE==='total'?d.t:AGH_MODE==='ans'?d.a:d.t?Math.round(d.a/d.t*100):0)}});
+  const mx=Math.max(...allVals,1);
+
+  let html='<thead><tr><th style="padding:3px 8px;color:var(--muted);font-size:10px;text-align:right;white-space:nowrap">Agent \\ Hour</th>';
+  for(let h=0;h<24;h++)html+='<th style="padding:2px 3px;color:var(--muted);font-size:9px;text-align:center;min-width:24px">'+(h%3===0?h:'')+'</th>';
+  html+='</tr></thead><tbody>';
+
+  agents.forEach(ag=>{
+    const short=ag.split(' ').slice(0,2).join(' ');
+    html+='<tr><th style="padding:3px 8px;color:var(--text);font-size:10px;text-align:right;white-space:nowrap;font-weight:600">'+esc(short)+'</th>';
+    for(let h=0;h<24;h++){
+      const d=grid[ag][h];
+      const v=AGH_MODE==='total'?d.t:AGH_MODE==='ans'?d.a:d.t?Math.round(d.a/d.t*100):0;
+      if(!v){html+='<td style="border-radius:3px;background:#161b22;min-width:24px;padding:3px 2px"></td>';continue;}
+      const bg=AGH_MODE==='rate'?rateCol(v):heatCol(v/mx);
+      const fg=(v/mx)>0.4?'#fff':'#8b949e';
+      html+='<td class="hm-cell" style="background:'+bg+';color:'+fg+';border-radius:3px;text-align:center;padding:3px 2px;font-size:10px;font-weight:600;cursor:pointer" '
+        +'title="'+esc(ag)+' · '+(h<10?'0'+h:h)+':00 — '+(AGH_MODE==='rate'?v+'%':v)+'" '
+        +'onclick="openAghDrill(\''+esc(ag).replace(/'/g,'&#39;')+'\','+h+')">'+v+'</td>';
+    }
+    html+='</tr>';
+  });
+  html+='</tbody>';
+  document.getElementById('agh-tbl').innerHTML=html;
+
+  // Legend
+  const leg=document.getElementById('agh-leg');if(!leg)return;
+  leg.innerHTML='';
+  for(let i=0;i<=10;i++){const s=document.createElement('span');s.style.background=AGH_MODE==='rate'?rateCol(i*10):heatCol(i/10);leg.appendChild(s);}
+}
+
+function openAghDrill(ag,h){
+  const rows=FILT.filter(r=>agentOf(r)===ag&&r._hour===h).sort((a,b)=>a._dt-b._dt);
+  if(!rows.length)return;
+  const hLabel=(h<10?'0'+h:h)+':00';
+  const ans=rows.filter(r=>r['Status']==='Answered').length;
+  const rate=rows.length?Math.round(ans/rows.length*100):0;
+  const rc=rate>=60?'var(--green)':rate>=40?'var(--orange)':'var(--red)';
+  document.getElementById('agh-drill-title').textContent='📍 '+ag+' · '+hLabel+' ('+rows.length+' calls)';
+  document.getElementById('agh-drill-badges').innerHTML=
+    '<span style="background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.3);color:var(--blue);font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px">Total: '+rows.length+'</span>'+
+    '<span style="background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:var(--green);font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px">✔ '+ans+'</span>'+
+    '<span style="background:rgba(248,81,73,.12);border:1px solid rgba(248,81,73,.3);color:var(--red);font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px">✘ '+(rows.length-ans)+'</span>'+
+    '<span style="border:1px solid var(--border);font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;color:'+rc+'">'+rate+'%</span>';
+  document.getElementById('agh-drill-body').innerHTML=rows.map(r=>{
+    const ct=(r['Call Time']||'').toString();
+    const t=ct.includes('T')?ct.split('T')[1]?.slice(0,8):ct.slice(11,19);
+    return'<tr style="border-bottom:1px solid rgba(48,54,61,.3)">'+
+      '<td style="padding:4px 10px;color:var(--muted);font-size:11px;white-space:nowrap">'+esc(t||ct.slice(0,19))+'</td>'+
+      '<td style="padding:4px 10px;white-space:nowrap;max-width:130px;overflow:hidden;text-overflow:ellipsis">'+esc(r['From']||'—')+'</td>'+
+      '<td style="padding:4px 10px;white-space:nowrap;max-width:130px;overflow:hidden;text-overflow:ellipsis">'+esc(r['To']||'—')+'</td>'+
+      '<td style="padding:4px 10px;text-align:center">'+dirTag(r['Direction']||'')+'</td>'+
+      '<td style="padding:4px 10px;text-align:center">'+stTag(r['Status']||'')+'</td>'+
+      '<td style="padding:4px 10px;text-align:center">'+crTag(r._result)+'</td>'+
+      '<td style="padding:4px 10px;text-align:right;color:'+(r._ts>0?'var(--text)':'var(--muted)')+'">'+esc(r['Talking']||'—')+'</td>'+
+    '</tr>';
+  }).join('');
+  const drill=document.getElementById('agh-drill');
+  drill.style.display='block';
+  drill.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 
 function buildAgCharts(){
@@ -2082,7 +2208,96 @@ function openDrill(agentName){
 
 function closeDrill(){
   DRILL_AGENT=null;
-  document.getElementById('agent-drill').style.display='none';
+  const p=document.getElementById('agent-drill');
+  if(p)p.style.display='none';
+}
+
+// ── Inline accordion expand per agent row ──
+let AG_OPEN={};
+function toggleAgExpand(agId,agentName){
+  const existRow=document.getElementById('agx-'+agId);
+  const arr=document.getElementById('agr-arr-'+agId);
+  if(existRow){
+    existRow.remove();
+    AG_OPEN[agId]=false;
+    if(arr)arr.textContent='▶';
+    return;
+  }
+  AG_OPEN[agId]=true;
+  if(arr)arr.textContent='▼';
+
+  const agRows=FILT.filter(r=>agentOf(r)===agentName);
+  const hrData=Array.from({length:24},(_,h)=>({h,t:0,a:0,u:0}));
+  agRows.forEach(r=>{const h=r._hour;if(h>=0&&h<24){hrData[h].t++;if(r['Status']==='Answered')hrData[h].a++;else hrData[h].u++;}});
+  const active=hrData.filter(d=>d.t>0);
+  const mx=Math.max(...active.map(d=>d.t),1);
+
+  // Build mini heatmap + table HTML
+  const hmCells=Array.from({length:24},(_,h)=>{
+    const d=hrData[h];
+    if(!d.t)return'<td style="padding:3px 5px;font-size:10px;text-align:center;color:var(--muted)">—</td>';
+    const pct=d.t/mx;
+    const r2=Math.round(d.t*220),g2=Math.round(d.t*100);
+    const bg='rgba('+r2+','+g2+',0,0.85)';
+    const fg=pct>0.4?'#fff':'#8b949e';
+    const rate=Math.round(d.a/d.t*100);
+    return'<td style="padding:3px 5px;font-size:10px;text-align:center;background:'+bg+';color:'+fg+';border-radius:3px;cursor:default" title="'+( h<10?'0'+h:h)+':00 — Total:'+d.t+' Ans:'+d.a+' ('+rate+'%)">'+d.t+'</td>';
+  }).join('');
+
+  const tblRows=active.map(d=>{
+    const rate=d.t?Math.round(d.a/d.t*100):0;
+    const rc=rate>=60?'var(--green)':rate>=40?'var(--orange)':'var(--red)';
+    const bw=Math.round(d.t/mx*100);
+    const isPeak=d.t===mx;
+    return'<tr style="border-bottom:1px solid rgba(48,54,61,.25);'+(isPeak?'background:rgba(248,159,80,.06)':'')+'">'+
+      '<td style="padding:4px 10px;font-weight:'+(isPeak?700:400)+';color:'+(isPeak?'var(--primary)':'var(--text)')+'white-space:nowrap">'+(d.h<10?'0'+d.h:d.h)+':00'+(isPeak?' ⭐':'')+'</td>'+
+      '<td style="padding:4px 10px;text-align:right;color:var(--blue);font-weight:700">'+d.t+'</td>'+
+      '<td style="padding:4px 10px;text-align:right;color:var(--green)">'+d.a+'</td>'+
+      '<td style="padding:4px 10px;text-align:right;color:var(--red)">'+d.u+'</td>'+
+      '<td style="padding:4px 10px;text-align:right;font-weight:700;color:'+rc+'">'+rate+'%</td>'+
+      '<td style="padding:4px 10px;min-width:100px"><div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden"><div style="width:'+bw+'%;height:100%;background:'+(isPeak?'var(--primary)':'var(--cyan)')+';border-radius:3px"></div></div></td>'+
+    '</tr>';
+  }).join('');
+
+  const colspan=14;
+  const html=`<tr id="agx-${agId}" style="background:var(--card2)">
+    <td colspan="${colspan}" style="padding:0;border-bottom:2px solid var(--primary)33">
+      <div style="padding:12px 18px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
+          <span style="font-size:12px;font-weight:800;color:var(--primary)">⏰ Hourly Report — ${esc(agentName)}</span>
+          <span style="font-size:11px;color:var(--muted)">${agRows.length} total calls · ${active.length} active hours</span>
+        </div>
+        <!-- Mini heatmap -->
+        <div style="overflow-x:auto;margin-bottom:10px">
+          <table style="border-collapse:separate;border-spacing:2px;font-size:10px">
+            <thead><tr>
+              <th style="color:var(--muted);font-size:10px;padding:2px 5px;text-align:right;white-space:nowrap">Hour →</th>
+              ${Array.from({length:24},(_,h)=>'<th style="color:var(--muted);font-size:9px;text-align:center;padding:2px 3px">'+(h%3===0?h:'')+'</th>').join('')}
+            </tr></thead>
+            <tbody><tr>
+              <th style="color:var(--text);font-size:10px;text-align:right;padding:2px 8px;white-space:nowrap">${esc(agentName.split(' ')[0])}</th>
+              ${hmCells}
+            </tr></tbody>
+          </table>
+        </div>
+        <!-- Hourly detail table -->
+        <table style="width:100%;border-collapse:collapse;font-size:11px;max-width:500px">
+          <thead><tr>
+            <th style="padding:4px 10px;border-bottom:1px solid var(--border);color:var(--muted);text-align:left">Hour</th>
+            <th style="padding:4px 10px;border-bottom:1px solid var(--border);color:var(--blue);text-align:right">Total</th>
+            <th style="padding:4px 10px;border-bottom:1px solid var(--border);color:var(--green);text-align:right">Ans</th>
+            <th style="padding:4px 10px;border-bottom:1px solid var(--border);color:var(--red);text-align:right">Unans</th>
+            <th style="padding:4px 10px;border-bottom:1px solid var(--border);color:var(--orange);text-align:right">Rate</th>
+            <th style="padding:4px 10px;border-bottom:1px solid var(--border);color:var(--muted);min-width:100px">Bar</th>
+          </tr></thead>
+          <tbody>${tblRows}</tbody>
+        </table>
+      </div>
+    </td>
+  </tr>`;
+
+  const parentRow=document.getElementById('agr-'+agId);
+  if(parentRow) parentRow.insertAdjacentHTML('afterend',html);
 }
 
 // ============================================================
