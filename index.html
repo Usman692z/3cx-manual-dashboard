@@ -2270,7 +2270,7 @@ function toggleAgExpand(agId,agentName){
     const bw=Math.round(d.t/mx*100);
     const isPeak=d.t===mx;
     return'<tr style="border-bottom:1px solid rgba(48,54,61,.25);'+(isPeak?'background:rgba(248,159,80,.06)':'')+'">'+
-      '<td style="padding:4px 10px;font-weight:'+(isPeak?700:400)+';color:'+(isPeak?'var(--primary)':'var(--text)')+'white-space:nowrap">'+(d.h<10?'0'+d.h:d.h)+':00'+(isPeak?' ⭐':'')+'</td>'+
+      '<td style="padding:4px 10px;font-weight:'+(isPeak?700:400)+';color:'+(isPeak?'var(--primary)':'var(--text)')+';white-space:nowrap">'+(d.h===0?'12am':d.h<12?d.h+'am':d.h===12?'12pm':(d.h-12)+'pm')+(isPeak?' ⭐':'')+'</td>'+
       '<td style="padding:4px 10px;text-align:right;color:var(--blue);font-weight:700">'+d.t+'</td>'+
       '<td style="padding:4px 10px;text-align:right;color:var(--green)">'+d.a+'</td>'+
       '<td style="padding:4px 10px;text-align:right;color:var(--red)">'+d.u+'</td>'+
