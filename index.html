@@ -680,7 +680,7 @@ tbody tr:hover .sticky{background:var(--card2)}
         <th onclick="sa('lang')" style="color:#bc8cff">Language&#8597;</th>
         <th onclick="sa('unique')" style="color:var(--cyan)" id="th-unique">Unique #&#8597;</th>
         <th onclick="sa('total')" id="th-total">Total Attempts&#8597;</th>
-        <th onclick="sa('answered')">Answered&#8597;</th>
+        <th onclick="sa('answered')" style="color:var(--green)" id="th-answered">Answered&#8597;</th>
         <th onclick="sa('unanswered')">Unanswered&#8597;</th>
         <th onclick="sa('ans_rate')">Answer Rate&#8597;</th>
         <th onclick="sa('completed')" style="color:var(--green)" id="th-completed">✅ Completed&#8597;</th>
@@ -1943,7 +1943,7 @@ function renderAgTable(){
       '<td>'+langBadge+'</td>'+
       '<td style="'+(isUniq?'background:rgba(20,174,195,.07);border-left:2px solid rgba(20,174,195,.4)':'')+'">'+uniqueBadge+'</td>'+
       '<td style="'+totalStyle+'">'+a.total+(isUniq?'<span style="color:var(--muted);font-size:10px;margin-left:3px">attempts</span>':'')+'</td>'+
-      '<td style="color:var(--green)">'+np(a.answered)+'</td>'+
+      '<td style="color:var(--green);background:rgba(63,185,80,.07);border-left:2px solid rgba(63,185,80,.4);font-weight:700">'+np(a.answered)+'</td>'+
       '<td style="color:var(--red)">'+np(a.unanswered)+'</td>'+
       '<td>'+rp(a.ans_rate)+bar+'</td>'+
       '<td style="color:var(--green);background:rgba(16,219,160,.07);border-left:2px solid rgba(16,219,160,.4);font-weight:700">'+np(a.completed)+'</td>'+
@@ -1982,7 +1982,7 @@ function renderAgTable(){
     '<td style="color:var(--muted);font-size:11px">All</td>'+
     '<td style="color:var(--cyan);font-weight:800;'+(isUniq?'background:rgba(20,174,195,.07);border-left:2px solid rgba(20,174,195,.4)':'')+'">'+T.unique+'</td>'+
     '<td style="font-weight:800;color:'+(isUniq?'var(--muted)':'var(--orange)')+'">'+T.total+'</td>'+
-    '<td style="color:var(--green)">'+tnp(T.answered)+'</td>'+
+    '<td style="color:var(--green);background:rgba(63,185,80,.07);border-left:2px solid rgba(63,185,80,.4);font-weight:800">'+tnp(T.answered)+'</td>'+
     '<td style="color:var(--red)">'+tnp(T.unanswered)+'</td>'+
     '<td>'+rp(T.ans_rate)+tbar+'</td>'+
     '<td style="color:var(--green);background:rgba(16,219,160,.07);border-left:2px solid rgba(16,219,160,.4);font-weight:800">'+tnp(T.completed)+'</td>'+
