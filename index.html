@@ -680,6 +680,8 @@ tbody tr:hover .sticky{background:var(--card2)}
         <th onclick="sa('lang')" style="color:#bc8cff">Language&#8597;</th>
         <th onclick="sa('unique')" style="color:var(--cyan)" id="th-unique">Unique #&#8597;</th>
         <th onclick="sa('total')" id="th-total">Total Attempts&#8597;</th>
+        <th onclick="sa('inbound')" style="color:#bc8cff">Inbound&#8597;</th>
+        <th onclick="sa('inbound_ans')" style="color:#bc8cff">Inbound Ans&#8597;</th>
         <th onclick="sa('answered')" style="color:var(--green)" id="th-answered">Answered&#8597;</th>
         <th onclick="sa('unanswered')">Unanswered&#8597;</th>
         <th onclick="sa('ans_rate')">Answer Rate&#8597;</th>
@@ -1869,13 +1871,15 @@ function buildAgData(){
   FILT.forEach(r=>{
     const a=agentOf(r);
     if(!isAgent(a))return;
-    if(!map[a])map[a]={agent:a,lang:agentLang(a),type:agentType(a),dept:agentDept(a),total:0,answered:0,unanswered:0,waiting:0,completed:0,declined:0,wrong:0,timed_out:0,ts:0,tc:0,ss:0,sc:0,_nums:new Set()};
+    if(!map[a])map[a]={agent:a,lang:agentLang(a),type:agentType(a),dept:agentDept(a),total:0,answered:0,unanswered:0,waiting:0,completed:0,declined:0,wrong:0,timed_out:0,inbound:0,inbound_ans:0,outbound:0,outbound_ans:0,ts:0,tc:0,ss:0,sc:0,_nums:new Set()};
     const m=map[a]; m.total++;
     // Track unique other-party number
     const dir=(r['Direction']||'').trim();
     const otherNum=(dir==='Outbound'?(r['To']||''):(r['From']||'')).trim().replace(/\D/g,'');
     if(otherNum) m._nums.add(otherNum);
-    if(r['Status']==='Answered'){m.answered++;m.ts+=r._ts;m.tc++}
+    const isInb=(dir==='Inbound'||dir==='Inbound Queue');
+    if(isInb)m.inbound++; else if(dir==='Outbound')m.outbound++;
+    if(r['Status']==='Answered'){m.answered++;m.ts+=r._ts;m.tc++;if(isInb)m.inbound_ans++;else if(dir==='Outbound')m.outbound_ans++;}
     if(r['Status']==='Unanswered')m.unanswered++;
     if(r['Status']==='Waiting')m.waiting++;
     if(r._result==='Completed Call')m.completed++;
@@ -1943,6 +1947,8 @@ function renderAgTable(){
       '<td>'+langBadge+'</td>'+
       '<td style="'+(isUniq?'background:rgba(20,174,195,.07);border-left:2px solid rgba(20,174,195,.4)':'')+'">'+uniqueBadge+'</td>'+
       '<td style="'+totalStyle+'">'+a.total+(isUniq?'<span style="color:var(--muted);font-size:10px;margin-left:3px">attempts</span>':'')+'</td>'+
+      '<td style="color:#bc8cff;background:rgba(188,140,255,.07);border-left:2px solid rgba(188,140,255,.35);font-weight:700">'+np(a.inbound)+'</td>'+
+      '<td style="color:#bc8cff;font-weight:600">'+np(a.inbound_ans)+(a.inbound?'<span style="color:var(--muted);font-size:10px;margin-left:3px">('+Math.round(a.inbound_ans/a.inbound*100)+'%)</span>':'')+'</td>'+
       '<td style="color:var(--green);background:rgba(63,185,80,.07);border-left:2px solid rgba(63,185,80,.4);font-weight:700">'+np(a.answered)+'</td>'+
       '<td style="color:var(--red)">'+np(a.unanswered)+'</td>'+
       '<td>'+rp(a.ans_rate)+bar+'</td>'+
@@ -1961,6 +1967,8 @@ function renderAgTable(){
     unique:    data.reduce((s,a)=>s+a.unique,0),
     answered:  data.reduce((s,a)=>s+a.answered,0),
     unanswered:data.reduce((s,a)=>s+a.unanswered,0),
+    inbound:   data.reduce((s,a)=>s+a.inbound,0),
+    inbound_ans:data.reduce((s,a)=>s+a.inbound_ans,0),
     completed: data.reduce((s,a)=>s+a.completed,0),
     declined:  data.reduce((s,a)=>s+a.declined,0),
     wrong:     data.reduce((s,a)=>s+a.wrong,0),
@@ -1982,6 +1990,8 @@ function renderAgTable(){
     '<td style="color:var(--muted);font-size:11px">All</td>'+
     '<td style="color:var(--cyan);font-weight:800;'+(isUniq?'background:rgba(20,174,195,.07);border-left:2px solid rgba(20,174,195,.4)':'')+'">'+T.unique+'</td>'+
     '<td style="font-weight:800;color:'+(isUniq?'var(--muted)':'var(--orange)')+'">'+T.total+'</td>'+
+    '<td style="color:#bc8cff;background:rgba(188,140,255,.07);border-left:2px solid rgba(188,140,255,.35);font-weight:800">'+T.inbound+'</td>'+
+    '<td style="color:#bc8cff;font-weight:700">'+T.inbound_ans+(T.inbound?'<span style="color:var(--muted);font-size:10px;margin-left:3px">('+Math.round(T.inbound_ans/T.inbound*100)+'%)</span>':'')+'</td>'+
     '<td style="color:var(--green);background:rgba(63,185,80,.07);border-left:2px solid rgba(63,185,80,.4);font-weight:800">'+tnp(T.answered)+'</td>'+
     '<td style="color:var(--red)">'+tnp(T.unanswered)+'</td>'+
     '<td>'+rp(T.ans_rate)+tbar+'</td>'+
