@@ -675,6 +675,7 @@ tbody tr:hover .sticky{background:var(--card2)}
   <div class="tcard">
     <h3>Agent Performance <span class="cnt" id="ag-cnt"></span>
       <span id="ag-mode-badge" style="margin-left:6px;background:rgba(20,174,195,.15);border:1px solid rgba(20,174,195,.4);color:var(--cyan);font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;text-transform:none;letter-spacing:0">All Attempts</span>
+      <button onclick="exportAgentPDF()" style="margin-left:10px;padding:3px 12px;font-size:11px;font-family:inherit;font-weight:700;background:rgba(248,81,73,.12);border:1px solid rgba(248,81,73,.5);color:#ff6b6b;border-radius:6px;cursor:pointer">⬇ Export PDF</button>
     </h3>
     <div class="tbl-wrap"><table>
       <thead><tr>
@@ -2379,6 +2380,104 @@ function agTab(agId,tab){
     if(active){btn.style.background=t==='inbound'?'#bc8cff':'var(--primary)';btn.style.color='#fff';btn.style.borderColor=t==='inbound'?'#bc8cff':'var(--primary)';}
     else{btn.style.background='transparent';btn.style.color=t==='inbound'?'#bc8cff':'var(--primary)';btn.style.borderColor=t==='inbound'?'rgba(188,140,255,.4)':'rgba(var(--primary-rgb),.4)';}
   });
+}
+
+function exportAgentPDF(){
+  function doExport(jsPDF,autoTable){
+    const doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
+    // Title
+    const dateRange=document.getElementById('data-range')?.textContent||'';
+    doc.setFontSize(14);doc.setTextColor(20,174,195);
+    doc.text('Agent Performance Report',14,14);
+    doc.setFontSize(9);doc.setTextColor(120,130,140);
+    doc.text('Date: '+dateRange,14,20);
+    doc.text('Generated: '+new Date().toLocaleString(),14,25);
+
+    // Build table data from AG
+    const langFilter=(document.getElementById('f-lang')?.value||'').trim();
+    const typeFilter=(document.getElementById('f-type')?.value||'').trim();
+    const deptFilter=(document.getElementById('f-dept')?.value||'').trim();
+    const data=[...AG].filter(a=>(!langFilter||a.lang===langFilter)&&(!typeFilter||a.type===typeFilter)&&(!deptFilter||a.dept===deptFilter))
+      .sort((a,b)=>b.total-a.total);
+
+    const head=[['Agent','Dept','Language','Unique #','Total','Answered','%','Unanswered','%','Ans Rate','Completed','Declined','Wrong#','Timed Out','Avg Talk','Sentiment']];
+    const body=data.map(a=>[
+      a.agent,
+      a.dept||'—',
+      a.lang||'—',
+      a.unique,
+      a.total,
+      a.answered,
+      a.total?(a.answered/a.total*100).toFixed(1)+'%':'0%',
+      a.unanswered,
+      a.total?(a.unanswered/a.total*100).toFixed(1)+'%':'0%',
+      a.ans_rate+'%',
+      a.completed,
+      a.declined,
+      a.wrong,
+      a.timed_out,
+      a.avg_talk||'—',
+      a.avg_sent!=null?a.avg_sent.toFixed(1)+'★':'—'
+    ]);
+    // Totals row
+    const T={
+      total:data.reduce((s,a)=>s+a.total,0),
+      unique:data.reduce((s,a)=>s+a.unique,0),
+      answered:data.reduce((s,a)=>s+a.answered,0),
+      unanswered:data.reduce((s,a)=>s+a.unanswered,0),
+      completed:data.reduce((s,a)=>s+a.completed,0),
+      declined:data.reduce((s,a)=>s+a.declined,0),
+      wrong:data.reduce((s,a)=>s+a.wrong,0),
+      timed_out:data.reduce((s,a)=>s+a.timed_out,0),
+    };
+    body.push([
+      'TOTAL ('+data.length+')','All','All',T.unique,T.total,
+      T.answered,T.total?(T.answered/T.total*100).toFixed(1)+'%':'0%',
+      T.unanswered,T.total?(T.unanswered/T.total*100).toFixed(1)+'%':'0%',
+      T.total?Math.round(T.answered/T.total*100)+'%':'0%',
+      T.completed,T.declined,T.wrong,T.timed_out,'—','—'
+    ]);
+
+    autoTable(doc,{
+      head,body,
+      startY:30,
+      styles:{fontSize:7.5,cellPadding:2.5,textColor:[200,210,220],fillColor:[13,17,23],lineColor:[48,54,61],lineWidth:0.3},
+      headStyles:{fillColor:[20,174,195],textColor:[255,255,255],fontStyle:'bold',fontSize:8},
+      alternateRowStyles:{fillColor:[22,27,34]},
+      didParseCell:function(d){
+        if(d.row.index===body.length-1){
+          d.cell.styles.fontStyle='bold';
+          d.cell.styles.fillColor=[30,40,20];
+          d.cell.styles.textColor=[210,160,34];
+        }
+        // Colour Answered col green
+        if(d.column.index===5&&d.row.section==='body'){d.cell.styles.textColor=[63,185,80];}
+        // Colour Unanswered col red
+        if(d.column.index===7&&d.row.section==='body'){d.cell.styles.textColor=[248,81,73];}
+        // Unique col cyan
+        if(d.column.index===3&&d.row.section==='body'){d.cell.styles.textColor=[20,174,195];d.cell.styles.fontStyle='bold';}
+        // Completed col
+        if(d.column.index===10&&d.row.section==='body'){d.cell.styles.textColor=[16,219,160];}
+      },
+      margin:{left:10,right:10}
+    });
+
+    doc.save('agent-performance-'+new Date().toISOString().slice(0,10)+'.pdf');
+  }
+
+  // Load jsPDF lazily
+  if(window.jspdf&&window.jspdf.jsPDF){
+    doExport(window.jspdf.jsPDF,window.jspdf.autoTable||window.jspdfAutoTable);return;
+  }
+  const s1=document.createElement('script');
+  s1.src='https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js';
+  s1.onload=()=>{
+    const s2=document.createElement('script');
+    s2.src='https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js';
+    s2.onload=()=>doExport(window.jspdf.jsPDF,window.jspdf.autoTable||window.jspdfAutoTable);
+    document.head.appendChild(s2);
+  };
+  document.head.appendChild(s1);
 }
 
 // ============================================================
