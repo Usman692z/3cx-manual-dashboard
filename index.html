@@ -2383,8 +2383,9 @@ function agTab(agId,tab){
 }
 
 function exportAgentPDF(){
-  function doExport(jsPDF,autoTable){
+  function doExport(jsPDF){
     const doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
+    const autoTable=(d,opts)=>d.autoTable(opts);
     // Title
     const dateRange=document.getElementById('data-range')?.textContent||'';
     doc.setFontSize(14);doc.setTextColor(20,174,195);
@@ -2466,15 +2467,13 @@ function exportAgentPDF(){
   }
 
   // Load jsPDF lazily
-  if(window.jspdf&&window.jspdf.jsPDF){
-    doExport(window.jspdf.jsPDF,window.jspdf.autoTable||window.jspdfAutoTable);return;
-  }
+  if(window.jspdf&&window.jspdf.jsPDF&&doc_autoTableReady){doExport(window.jspdf.jsPDF);return;}
   const s1=document.createElement('script');
   s1.src='https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js';
   s1.onload=()=>{
     const s2=document.createElement('script');
     s2.src='https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js';
-    s2.onload=()=>doExport(window.jspdf.jsPDF,window.jspdf.autoTable||window.jspdfAutoTable);
+    s2.onload=()=>{window.doc_autoTableReady=true;doExport(window.jspdf.jsPDF);};
     document.head.appendChild(s2);
   };
   document.head.appendChild(s1);
