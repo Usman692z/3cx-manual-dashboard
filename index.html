@@ -2364,16 +2364,18 @@ function exportAgentHourlyPDF(agId, agentName){
     const dateRange=document.getElementById('data-range')?.textContent||'';
 
     const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+    const filterText=getActiveFilters();
     // Header
     doc.setFillColor(13,17,23);
-    doc.rect(0,0,210,30,'F');
+    doc.rect(0,0,210,36,'F');
     doc.setFontSize(15);doc.setTextColor(20,174,195);
     doc.text('Hourly Report',14,12);
     doc.setFontSize(11);doc.setTextColor(255,255,255);
     doc.text(agentName,14,20);
     doc.setFontSize(8);doc.setTextColor(120,130,140);
-    doc.text('Date: '+dateRange,14,27);
-    doc.text('Generated: '+new Date().toLocaleString(),120,27);
+    doc.text('Generated: '+new Date().toLocaleString(),14,27);
+    doc.setTextColor(210,160,34);
+    doc.text('Filters: '+filterText,14,33,{maxWidth:182});
 
     // Summary bar
     const totalCalls=agRows.length;
@@ -2381,10 +2383,10 @@ function exportAgentHourlyPDF(agId, agentName){
     const totalUn=totalCalls-totalAns;
     const rate=totalCalls?Math.round(totalAns/totalCalls*100):0;
     doc.setFontSize(9);
-    doc.setTextColor(20,174,195);  doc.text('Total Calls: '+totalCalls, 14, 37);
-    doc.setTextColor(63,185,80);   doc.text('Answered: '+totalAns+' ('+rate+'%)', 55, 37);
-    doc.setTextColor(248,81,73);   doc.text('Unanswered: '+totalUn, 105, 37);
-    doc.setTextColor(248,159,80);  doc.text('Peak Hour: '+(active.length?( h=>{const ampm=h===0?'12am':h<12?h+'am':h===12?'12pm':(h-12)+'pm';return ampm;})(active.reduce((p,c)=>c.t>p.t?c:p,active[0]).h):'—'), 150, 37);
+    doc.setTextColor(20,174,195);  doc.text('Total Calls: '+totalCalls, 14, 43);
+    doc.setTextColor(63,185,80);   doc.text('Answered: '+totalAns+' ('+rate+'%)', 55, 43);
+    doc.setTextColor(248,81,73);   doc.text('Unanswered: '+totalUn, 105, 43);
+    doc.setTextColor(248,159,80);  doc.text('Peak Hour: '+(active.length?( h=>{const ampm=h===0?'12am':h<12?h+'am':h===12?'12pm':(h-12)+'pm';return ampm;})(active.reduce((p,c)=>c.t>p.t?c:p,active[0]).h):'—'), 150, 43);
 
     // Hourly table
     const head=[['Hour','Total','Answered','Unanswered','Answer Rate','Bar']];
@@ -2397,7 +2399,7 @@ function exportAgentHourlyPDF(agId, agentName){
 
     doc.autoTable({
       head,body,
-      startY:42,
+      startY:48,
       styles:{fontSize:9,cellPadding:3,textColor:[200,210,220],fillColor:[13,17,23],lineColor:[48,54,61],lineWidth:0.3},
       headStyles:{fillColor:[20,174,195],textColor:[255,255,255],fontStyle:'bold'},
       alternateRowStyles:{fillColor:[22,27,34]},
@@ -2434,17 +2436,43 @@ function exportAgentHourlyPDF(agId, agentName){
   document.head.appendChild(s1);
 }
 
+function getActiveFilters(){
+  const parts=[];
+  const fFrom=document.getElementById('f-from')?.value;
+  const fTo=document.getElementById('f-to')?.value;
+  if(fFrom||fTo) parts.push('Date: '+(fFrom||'*')+' → '+(fTo||'*'));
+  const dir=document.getElementById('f-dir')?.value;
+  if(dir) parts.push('Direction: '+dir);
+  const status=document.getElementById('f-status')?.value;
+  if(status) parts.push('Status: '+status);
+  const result=document.getElementById('f-result')?.value;
+  if(result) parts.push('Result: '+result);
+  const lang=document.getElementById('f-lang')?.value;
+  if(lang) parts.push('Language: '+lang);
+  const dept=document.getElementById('f-dept')?.value;
+  if(dept) parts.push('Dept: '+dept);
+  const tFrom=document.getElementById('f-time-from')?.value;
+  const tTo=document.getElementById('f-time-to')?.value;
+  if(tFrom||tTo) parts.push('Time: '+(tFrom||'*')+' → '+(tTo||'*'));
+  const agents=window.MS_SEL&&MS_SEL.size?[...MS_SEL].join(', '):'';
+  if(agents) parts.push('Agents: '+agents);
+  return parts.length?parts.join('  |  '):'No filters applied';
+}
+
 function exportAgentPDF(){
   function doExport(jsPDF){
     const doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
     const autoTable=(d,opts)=>d.autoTable(opts);
-    // Title
-    const dateRange=document.getElementById('data-range')?.textContent||'';
+    // Header block
+    doc.setFillColor(13,17,23);
+    doc.rect(0,0,297,32,'F');
     doc.setFontSize(14);doc.setTextColor(20,174,195);
-    doc.text('Agent Performance Report',14,14);
-    doc.setFontSize(9);doc.setTextColor(120,130,140);
-    doc.text('Date: '+dateRange,14,20);
-    doc.text('Generated: '+new Date().toLocaleString(),14,25);
+    doc.text('Agent Performance Report',14,12);
+    doc.setFontSize(8);doc.setTextColor(120,130,140);
+    doc.text('Generated: '+new Date().toLocaleString(),14,19);
+    const filterText=getActiveFilters();
+    doc.setTextColor(210,160,34);
+    doc.text('Filters: '+filterText,14,26,{maxWidth:265});
 
     // Build table data from AG
     const langFilter=(document.getElementById('f-lang')?.value||'').trim();
@@ -2493,7 +2521,7 @@ function exportAgentPDF(){
 
     autoTable(doc,{
       head,body,
-      startY:30,
+      startY:36,
       styles:{fontSize:7.5,cellPadding:2.5,textColor:[200,210,220],fillColor:[13,17,23],lineColor:[48,54,61],lineWidth:0.3},
       headStyles:{fillColor:[20,174,195],textColor:[255,255,255],fontStyle:'bold',fontSize:8},
       alternateRowStyles:{fillColor:[22,27,34]},
