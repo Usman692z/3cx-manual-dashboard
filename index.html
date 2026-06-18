@@ -486,6 +486,9 @@ tbody tr:hover .sticky{background:var(--card2)}
     <div class="kpi or"><div class="kpi-lbl">Answer Rate</div><div class="kpi-val" id="k-rate">-</div><div class="kpi-sub">of all calls</div></div>
     <div class="kpi cy"><div class="kpi-lbl">Outbound</div><div class="kpi-val" id="k-out">-</div><div class="kpi-pct" id="k-out-p" style="color:var(--cyan)"></div></div>
     <div class="kpi pk"><div class="kpi-lbl">Inbound</div><div class="kpi-val" id="k-in">-</div><div class="kpi-pct" id="k-in-p" style="color:var(--pink)"></div></div>
+    <div class="kpi" style="border-left:3px solid #bc8cff"><div class="kpi-lbl" style="color:#bc8cff">Inbound Total</div><div class="kpi-val" id="k-inb-total" style="color:#bc8cff">-</div><div class="kpi-sub" id="k-inb-rate" style="color:var(--muted)"></div></div>
+    <div class="kpi" style="border-left:3px solid var(--green)"><div class="kpi-lbl" style="color:var(--green)">Inbound Answered</div><div class="kpi-val" id="k-inb-ans" style="color:var(--green)">-</div><div class="kpi-pct" id="k-inb-ans-p" style="color:var(--green)"></div></div>
+    <div class="kpi" style="border-left:3px solid var(--red)"><div class="kpi-lbl" style="color:var(--red)">Inbound Abandoned</div><div class="kpi-val" id="k-inb-abn" style="color:var(--red)">-</div><div class="kpi-pct" id="k-inb-abn-p" style="color:var(--red)"></div></div>
     <div class="kpi pu"><div class="kpi-lbl">Avg Sentiment</div><div class="kpi-val" id="k-sent">-</div><div class="kpi-sub">out of 5</div></div>
     <div class="kpi ye"><div class="kpi-lbl">Avg Talk Time</div><div class="kpi-val" id="k-talk">-</div><div class="kpi-sub">answered</div></div>
   </div>
@@ -1743,6 +1746,17 @@ function renderKPIs(){
   setText('k-out',Nfmt(out)); setText('k-in',Nfmt(inb));
   setText('k-out-p',n?(out/n*100).toFixed(1)+'% of calls':'');
   setText('k-in-p',n?(inb/n*100).toFixed(1)+'% of calls':'');
+  const inbRows=df.filter(r=>{const d=(r['Direction']||'').trim();return d==='Inbound'||d==='Inbound Queue';});
+  const inbAns=inbRows.filter(r=>r['Status']==='Answered').length;
+  const inbAbn=inbRows.filter(r=>r['Status']==='Unanswered').length;
+  const inbTotal=inbRows.length;
+  const inbRate=inbTotal?Math.round(inbAns/inbTotal*100):0;
+  setText('k-inb-total',Nfmt(inbTotal));
+  setText('k-inb-rate',inbTotal?(inbRate+'% answer rate'):'');
+  setText('k-inb-ans',Nfmt(inbAns));
+  setText('k-inb-ans-p',inbTotal?(inbAns/inbTotal*100).toFixed(1)+'% of inbound':'');
+  setText('k-inb-abn',Nfmt(inbAbn));
+  setText('k-inb-abn-p',inbTotal?(inbAbn/inbTotal*100).toFixed(1)+'% abandoned':'');
   setText('k-sent',sents.length?(sents.reduce((a,b)=>a+b,0)/sents.length).toFixed(1)+'\u2605':'-');
   setText('k-talk',talks.length?sfmt(talks.reduce((a,b)=>a+b,0)/talks.length):'-');
   const comp=df.filter(r=>r._result==='Completed Call').length;
