@@ -2270,45 +2270,107 @@ function toggleAgExpand(agId,agentName){
     '</tr>';
   }).join('');
 
-  const colspan=14;
+  // Inbound calls list
+  const inbRows=agRows.filter(r=>{const d=(r['Direction']||'').trim();return d==='Inbound'||d==='Inbound Queue';});
+  const inbTableRows=inbRows.map(r=>{
+    const t=r['Call Time']||r['Start Time']||'';
+    const tDisp=t?t.toString().replace('T',' ').slice(0,16):'-';
+    const from=(r['From']||'-').toString().trim();
+    const st=r['Status']||'';
+    const stCol=st==='Answered'?'var(--green)':st==='Unanswered'?'var(--red)':'var(--orange)';
+    const dur=r._ts>0?sfmt(r._ts):'-';
+    const res=r._result||'-';
+    return`<tr style="border-bottom:1px solid rgba(48,54,61,.2)">
+      <td style="padding:3px 8px;font-size:11px;color:var(--muted)">${esc(tDisp)}</td>
+      <td style="padding:3px 8px;font-size:11px;color:var(--cyan)">${esc(from)}</td>
+      <td style="padding:3px 8px;font-size:11px;font-weight:700;color:${stCol}">${esc(st)}</td>
+      <td style="padding:3px 8px;font-size:11px;color:var(--text)">${esc(res)}</td>
+      <td style="padding:3px 8px;font-size:11px;color:var(--blue)">${dur}</td>
+    </tr>`;
+  }).join('');
+  const inbAns=inbRows.filter(r=>r['Status']==='Answered').length;
+  const inbRate=inbRows.length?Math.round(inbAns/inbRows.length*100):0;
+
+  const colspan=16;
   const html=`<tr id="agx-${agId}" style="background:var(--card2)">
     <td colspan="${colspan}" style="padding:0;border-bottom:2px solid var(--primary)33">
       <div style="padding:12px 18px">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
-          <span style="font-size:12px;font-weight:800;color:var(--primary)">⏰ Hourly Report — ${esc(agentName)}</span>
-          <span style="font-size:11px;color:var(--muted)">${agRows.length} total calls · ${active.length} active hours</span>
+        <!-- Tab buttons -->
+        <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+          <button onclick="agTab('${agId}','hourly')" id="agtb-hourly-${agId}" style="padding:3px 12px;font-size:11px;border-radius:6px;border:1px solid var(--primary);background:var(--primary);color:#fff;cursor:pointer;font-family:inherit">⏰ Hourly</button>
+          <button onclick="agTab('${agId}','inbound')" id="agtb-inbound-${agId}" style="padding:3px 12px;font-size:11px;border-radius:6px;border:1px solid rgba(188,140,255,.4);background:transparent;color:#bc8cff;cursor:pointer;font-family:inherit">📞 Inbound (${inbRows.length})</button>
+          <span style="font-size:11px;color:var(--muted);margin-left:6px">${esc(agentName)} · ${agRows.length} total calls</span>
         </div>
-        <!-- Mini heatmap -->
-        <div style="overflow-x:auto;margin-bottom:10px">
-          <table style="border-collapse:separate;border-spacing:2px;font-size:10px">
+
+        <!-- Hourly panel -->
+        <div id="agtp-hourly-${agId}">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <span style="font-size:11px;color:var(--muted)">${active.length} active hours</span>
+          </div>
+          <div style="overflow-x:auto;margin-bottom:10px">
+            <table style="border-collapse:separate;border-spacing:2px;font-size:10px">
+              <thead><tr>
+                <th style="color:var(--muted);font-size:10px;padding:2px 5px;text-align:right;white-space:nowrap">Hour →</th>
+                ${Array.from({length:24},(_,h)=>{const ampm=h===0?'12am':h<12?h+'am':h===12?'12pm':(h-12)+'pm';return'<th style="color:var(--muted);font-size:9px;text-align:center;padding:2px 3px;white-space:nowrap">'+ampm+'</th>'}).join('')}
+              </tr></thead>
+              <tbody><tr>
+                <th style="color:var(--text);font-size:10px;text-align:right;padding:2px 8px;white-space:nowrap">${esc(agentName.split(' ')[0])}</th>
+                ${hmCells}
+              </tr></tbody>
+            </table>
+          </div>
+          <table style="width:100%;border-collapse:collapse;font-size:11px;max-width:500px">
             <thead><tr>
-              <th style="color:var(--muted);font-size:10px;padding:2px 5px;text-align:right;white-space:nowrap">Hour →</th>
-              ${Array.from({length:24},(_,h)=>{const ampm=h===0?'12am':h<12?h+'am':h===12?'12pm':(h-12)+'pm';return'<th style="color:var(--muted);font-size:9px;text-align:center;padding:2px 3px;white-space:nowrap">'+ampm+'</th>'}).join('')}
+              <th style="padding:4px 10px;border-bottom:1px solid var(--border);color:var(--muted);text-align:left">Hour</th>
+              <th style="padding:4px 10px;border-bottom:1px solid var(--border);color:var(--blue);text-align:right">Total</th>
+              <th style="padding:4px 10px;border-bottom:1px solid var(--border);color:var(--green);text-align:right">Ans</th>
+              <th style="padding:4px 10px;border-bottom:1px solid var(--border);color:var(--red);text-align:right">Unans</th>
+              <th style="padding:4px 10px;border-bottom:1px solid var(--border);color:var(--orange);text-align:right">Rate</th>
+              <th style="padding:4px 10px;border-bottom:1px solid var(--border);color:var(--muted);min-width:100px">Bar</th>
             </tr></thead>
-            <tbody><tr>
-              <th style="color:var(--text);font-size:10px;text-align:right;padding:2px 8px;white-space:nowrap">${esc(agentName.split(' ')[0])}</th>
-              ${hmCells}
-            </tr></tbody>
+            <tbody>${tblRows}</tbody>
           </table>
         </div>
-        <!-- Hourly detail table -->
-        <table style="width:100%;border-collapse:collapse;font-size:11px;max-width:500px">
-          <thead><tr>
-            <th style="padding:4px 10px;border-bottom:1px solid var(--border);color:var(--muted);text-align:left">Hour</th>
-            <th style="padding:4px 10px;border-bottom:1px solid var(--border);color:var(--blue);text-align:right">Total</th>
-            <th style="padding:4px 10px;border-bottom:1px solid var(--border);color:var(--green);text-align:right">Ans</th>
-            <th style="padding:4px 10px;border-bottom:1px solid var(--border);color:var(--red);text-align:right">Unans</th>
-            <th style="padding:4px 10px;border-bottom:1px solid var(--border);color:var(--orange);text-align:right">Rate</th>
-            <th style="padding:4px 10px;border-bottom:1px solid var(--border);color:var(--muted);min-width:100px">Bar</th>
-          </tr></thead>
-          <tbody>${tblRows}</tbody>
-        </table>
+
+        <!-- Inbound panel (hidden by default) -->
+        <div id="agtp-inbound-${agId}" style="display:none">
+          <div style="display:flex;gap:16px;margin-bottom:10px;flex-wrap:wrap">
+            <span style="font-size:12px;font-weight:700;color:#bc8cff">${inbRows.length} Inbound Calls</span>
+            <span style="font-size:11px;color:var(--green)">${inbAns} Answered</span>
+            <span style="font-size:11px;color:var(--red)">${inbRows.length-inbAns} Unanswered</span>
+            <span style="font-size:11px;color:var(--orange);font-weight:700">${inbRate}% Answer Rate</span>
+          </div>
+          <div style="overflow-x:auto;max-height:320px;overflow-y:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:11px">
+              <thead><tr style="position:sticky;top:0;background:var(--card2)">
+                <th style="padding:4px 8px;border-bottom:1px solid var(--border);color:var(--muted);text-align:left">Time</th>
+                <th style="padding:4px 8px;border-bottom:1px solid var(--border);color:var(--cyan);text-align:left">From</th>
+                <th style="padding:4px 8px;border-bottom:1px solid var(--border);color:var(--green);text-align:left">Status</th>
+                <th style="padding:4px 8px;border-bottom:1px solid var(--border);color:var(--muted);text-align:left">Result</th>
+                <th style="padding:4px 8px;border-bottom:1px solid var(--border);color:var(--blue);text-align:left">Duration</th>
+              </tr></thead>
+              <tbody>${inbTableRows||'<tr><td colspan="5" style="padding:12px;text-align:center;color:var(--muted)">No inbound calls</td></tr>'}</tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </td>
   </tr>`;
 
   const parentRow=document.getElementById('agr-'+agId);
   if(parentRow) parentRow.insertAdjacentHTML('afterend',html);
+}
+
+function agTab(agId,tab){
+  ['hourly','inbound'].forEach(t=>{
+    const panel=document.getElementById('agtp-'+t+'-'+agId);
+    const btn=document.getElementById('agtb-'+t+'-'+agId);
+    if(!panel||!btn)return;
+    const active=t===tab;
+    panel.style.display=active?'':'none';
+    if(active){btn.style.background=t==='inbound'?'#bc8cff':'var(--primary)';btn.style.color='#fff';btn.style.borderColor=t==='inbound'?'#bc8cff':'var(--primary)';}
+    else{btn.style.background='transparent';btn.style.color=t==='inbound'?'#bc8cff':'var(--primary)';btn.style.borderColor=t==='inbound'?'rgba(188,140,255,.4)':'rgba(var(--primary-rgb),.4)';}
+  });
 }
 
 // ============================================================
