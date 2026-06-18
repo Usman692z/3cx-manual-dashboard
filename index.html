@@ -676,6 +676,7 @@ tbody tr:hover .sticky{background:var(--card2)}
     <h3>Agent Performance <span class="cnt" id="ag-cnt"></span>
       <span id="ag-mode-badge" style="margin-left:6px;background:rgba(20,174,195,.15);border:1px solid rgba(20,174,195,.4);color:var(--cyan);font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;text-transform:none;letter-spacing:0">All Attempts</span>
       <button onclick="exportAgentPDF()" style="margin-left:10px;padding:3px 12px;font-size:11px;font-family:inherit;font-weight:700;background:rgba(248,81,73,.12);border:1px solid rgba(248,81,73,.5);color:#ff6b6b;border-radius:6px;cursor:pointer">⬇ Export PDF</button>
+      <button onclick="exportAllAgentsHourlyPDF()" style="margin-left:6px;padding:3px 12px;font-size:11px;font-family:inherit;font-weight:700;background:rgba(20,174,195,.12);border:1px solid rgba(20,174,195,.5);color:var(--cyan);border-radius:6px;cursor:pointer">⬇ All Agents Hourly PDF</button>
     </h3>
     <div class="tbl-wrap"><table>
       <thead><tr>
@@ -2548,6 +2549,101 @@ function exportAgentPDF(){
 
   // Load jsPDF lazily
   if(window.jspdf&&window.jspdf.jsPDF&&doc_autoTableReady){doExport(window.jspdf.jsPDF);return;}
+  const s1=document.createElement('script');
+  s1.src='https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js';
+  s1.onload=()=>{
+    const s2=document.createElement('script');
+    s2.src='https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js';
+    s2.onload=()=>{window.doc_autoTableReady=true;doExport(window.jspdf.jsPDF);};
+    document.head.appendChild(s2);
+  };
+  document.head.appendChild(s1);
+}
+
+function exportAllAgentsHourlyPDF(){
+  function doExport(jsPDF){
+    const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+    const filterText=getActiveFilters();
+    const dateStr=new Date().toISOString().slice(0,10);
+
+    // Cover header
+    doc.setFillColor(13,17,23);
+    doc.rect(0,0,210,40,'F');
+    doc.setFontSize(16);doc.setTextColor(20,174,195);
+    doc.text('All Agents — Hourly Report',14,14);
+    doc.setFontSize(9);doc.setTextColor(150,160,170);
+    doc.text('Generated: '+new Date().toLocaleString(),14,22);
+    doc.setTextColor(210,160,34);
+    doc.text('Filters: '+filterText,14,30,{maxWidth:182});
+    doc.setTextColor(150,160,170);
+    doc.text('Total Agents: '+AG.length,14,38);
+
+    const ampm=h=>h===0?'12am':h<12?h+'am':h===12?'12pm':(h-12)+'pm';
+
+    AG.forEach((agent,idx)=>{
+      const agRows=FILT.filter(r=>agentOf(r)===agent.agent);
+      const hrData=Array.from({length:24},(_,h)=>({h,t:0,a:0,u:0}));
+      agRows.forEach(r=>{const h=r._hour;if(h>=0&&h<24){hrData[h].t++;if(r['Status']==='Answered')hrData[h].a++;else hrData[h].u++;}});
+      const active=hrData.filter(d=>d.t>0);
+      const mx=Math.max(...active.map(d=>d.t),1);
+      const rate=agRows.length?Math.round(agent.answered/agRows.length*100):0;
+      const peak=active.length?active.reduce((p,c)=>c.t>p.t?c:p,active[0]):null;
+
+      // New page for each agent (except first)
+      if(idx>0) doc.addPage();
+
+      // Agent header bar
+      doc.setFillColor(20,27,36);
+      doc.rect(0,0,210,28,'F');
+      doc.setFontSize(13);doc.setTextColor(20,174,195);
+      doc.text(agent.agent,14,11);
+      doc.setFontSize(8);doc.setTextColor(150,160,170);
+      const deptLang=[agent.dept,agent.lang].filter(Boolean).join(' · ');
+      if(deptLang) doc.text(deptLang,14,18);
+      // Summary on right
+      doc.setTextColor(20,174,195);  doc.text('Total: '+agRows.length,130,11);
+      doc.setTextColor(63,185,80);   doc.text('Ans: '+agent.answered+' ('+rate+'%)',155,11);
+      doc.setTextColor(248,81,73);   doc.text('Unans: '+agent.unanswered,130,18);
+      doc.setTextColor(248,159,80);  doc.text('Peak: '+(peak?ampm(peak.h)+'('+peak.t+'calls)':'—'),155,18);
+      doc.setTextColor(16,219,160);  doc.text('Completed: '+agent.completed,130,25);
+      doc.setTextColor(150,160,170); doc.text('Avg Talk: '+agent.avg_talk,175,25);
+
+      if(!active.length){
+        doc.setFontSize(9);doc.setTextColor(120,130,140);
+        doc.text('No calls in selected period.',14,40);
+        return;
+      }
+
+      const head=[['Hour','Total','Answered','Unanswered','Answer Rate']];
+      const body=active.map(d=>{
+        const isPeak=d.t===mx;
+        const r=d.t?Math.round(d.a/d.t*100):0;
+        return[isPeak?ampm(d.h)+' *':ampm(d.h), d.t, d.a, d.u, r+'%'];
+      });
+
+      doc.autoTable({
+        head,body,
+        startY:32,
+        styles:{fontSize:9,cellPadding:3,textColor:[200,210,220],fillColor:[13,17,23],lineColor:[30,37,46],lineWidth:0.3},
+        headStyles:{fillColor:[20,174,195],textColor:[255,255,255],fontStyle:'bold'},
+        alternateRowStyles:{fillColor:[20,27,36]},
+        didParseCell:function(d){
+          if(d.section==='body'){
+            if(d.column.index===1) d.cell.styles.textColor=[20,174,195];
+            if(d.column.index===2) d.cell.styles.textColor=[63,185,80];
+            if(d.column.index===3) d.cell.styles.textColor=[248,81,73];
+            if(d.column.index===4){const v=parseInt(d.cell.raw);d.cell.styles.textColor=v>=60?[63,185,80]:v>=40?[248,159,80]:[248,81,73];d.cell.styles.fontStyle='bold';}
+            if(String(d.cell.raw).includes('*')){d.cell.styles.textColor=[248,159,80];d.cell.styles.fontStyle='bold';}
+          }
+        },
+        margin:{left:14,right:14}
+      });
+    });
+
+    doc.save('all-agents-hourly-'+dateStr+'.pdf');
+  }
+
+  if(window.jspdf&&window.jspdf.jsPDF&&window.doc_autoTableReady){doExport(window.jspdf.jsPDF);return;}
   const s1=document.createElement('script');
   s1.src='https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js';
   s1.onload=()=>{
