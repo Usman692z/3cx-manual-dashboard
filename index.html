@@ -2304,64 +2304,36 @@ function toggleAgExpand(agId,agentName){
   const html=`<tr id="agx-${agId}" style="background:var(--card2)">
     <td colspan="${colspan}" style="padding:0;border-bottom:2px solid var(--primary)33">
       <div style="padding:12px 18px">
-        <!-- Tab buttons -->
-        <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
-          <button onclick="agTab('${agId}','hourly')" id="agtb-hourly-${agId}" style="padding:3px 12px;font-size:11px;border-radius:6px;border:1px solid var(--primary);background:var(--primary);color:#fff;cursor:pointer;font-family:inherit">⏰ Hourly</button>
-          <button onclick="agTab('${agId}','inbound')" id="agtb-inbound-${agId}" style="padding:3px 12px;font-size:11px;border-radius:6px;border:1px solid rgba(188,140,255,.4);background:transparent;color:#bc8cff;cursor:pointer;font-family:inherit">📞 Inbound (${inbRows.length})</button>
-          <span style="font-size:11px;color:var(--muted);margin-left:6px">${esc(agentName)} · ${agRows.length} total calls</span>
+        <!-- Header bar -->
+        <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
+          <span style="font-size:12px;font-weight:800;color:var(--primary)">⏰ Hourly Report — ${esc(agentName)}</span>
+          <span style="font-size:11px;color:var(--muted)">${agRows.length} total calls · ${active.length} active hours</span>
+          <button onclick="exportAgentHourlyPDF('${agId}','${esc(agentName).replace(/'/g,"&#39;")}')" style="margin-left:auto;padding:3px 12px;font-size:11px;font-family:inherit;font-weight:700;background:rgba(248,81,73,.12);border:1px solid rgba(248,81,73,.5);color:#ff6b6b;border-radius:6px;cursor:pointer">⬇ Export PDF</button>
         </div>
-
-        <!-- Hourly panel -->
-        <div id="agtp-hourly-${agId}">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-            <span style="font-size:11px;color:var(--muted)">${active.length} active hours</span>
-          </div>
-          <div style="overflow-x:auto;margin-bottom:10px">
-            <table style="border-collapse:separate;border-spacing:2px;font-size:10px">
-              <thead><tr>
-                <th style="color:var(--muted);font-size:10px;padding:2px 5px;text-align:right;white-space:nowrap">Hour →</th>
-                ${Array.from({length:24},(_,h)=>{const ampm=h===0?'12am':h<12?h+'am':h===12?'12pm':(h-12)+'pm';return'<th style="color:var(--muted);font-size:9px;text-align:center;padding:2px 3px;white-space:nowrap">'+ampm+'</th>'}).join('')}
-              </tr></thead>
-              <tbody><tr>
-                <th style="color:var(--text);font-size:10px;text-align:right;padding:2px 8px;white-space:nowrap">${esc(agentName.split(' ')[0])}</th>
-                ${hmCells}
-              </tr></tbody>
-            </table>
-          </div>
-          <table style="width:100%;border-collapse:collapse;font-size:11px;max-width:500px">
+        <!-- Mini heatmap -->
+        <div style="overflow-x:auto;margin-bottom:10px">
+          <table style="border-collapse:separate;border-spacing:2px;font-size:10px">
             <thead><tr>
-              <th style="padding:4px 10px;border-bottom:1px solid var(--border);color:var(--muted);text-align:left">Hour</th>
-              <th style="padding:4px 10px;border-bottom:1px solid var(--border);color:var(--blue);text-align:right">Total</th>
-              <th style="padding:4px 10px;border-bottom:1px solid var(--border);color:var(--green);text-align:right">Ans</th>
-              <th style="padding:4px 10px;border-bottom:1px solid var(--border);color:var(--red);text-align:right">Unans</th>
-              <th style="padding:4px 10px;border-bottom:1px solid var(--border);color:var(--orange);text-align:right">Rate</th>
-              <th style="padding:4px 10px;border-bottom:1px solid var(--border);color:var(--muted);min-width:100px">Bar</th>
+              <th style="color:var(--muted);font-size:10px;padding:2px 5px;text-align:right;white-space:nowrap">Hour →</th>
+              ${Array.from({length:24},(_,h)=>{const ampm=h===0?'12am':h<12?h+'am':h===12?'12pm':(h-12)+'pm';return'<th style="color:var(--muted);font-size:9px;text-align:center;padding:2px 3px;white-space:nowrap">'+ampm+'</th>'}).join('')}
             </tr></thead>
-            <tbody>${tblRows}</tbody>
+            <tbody><tr>
+              <th style="color:var(--text);font-size:10px;text-align:right;padding:2px 8px;white-space:nowrap">${esc(agentName.split(' ')[0])}</th>
+              ${hmCells}
+            </tr></tbody>
           </table>
         </div>
-
-        <!-- Inbound panel (hidden by default) -->
-        <div id="agtp-inbound-${agId}" style="display:none">
-          <div style="display:flex;gap:16px;margin-bottom:10px;flex-wrap:wrap">
-            <span style="font-size:12px;font-weight:700;color:#bc8cff">${inbRows.length} Inbound Calls</span>
-            <span style="font-size:11px;color:var(--green)">${inbAns} Answered</span>
-            <span style="font-size:11px;color:var(--red)">${inbRows.length-inbAns} Unanswered</span>
-            <span style="font-size:11px;color:var(--orange);font-weight:700">${inbRate}% Answer Rate</span>
-          </div>
-          <div style="overflow-x:auto;max-height:320px;overflow-y:auto">
-            <table style="width:100%;border-collapse:collapse;font-size:11px">
-              <thead><tr style="position:sticky;top:0;background:var(--card2)">
-                <th style="padding:4px 8px;border-bottom:1px solid var(--border);color:var(--muted);text-align:left">Time</th>
-                <th style="padding:4px 8px;border-bottom:1px solid var(--border);color:var(--cyan);text-align:left">From</th>
-                <th style="padding:4px 8px;border-bottom:1px solid var(--border);color:var(--green);text-align:left">Status</th>
-                <th style="padding:4px 8px;border-bottom:1px solid var(--border);color:var(--muted);text-align:left">Result</th>
-                <th style="padding:4px 8px;border-bottom:1px solid var(--border);color:var(--blue);text-align:left">Duration</th>
-              </tr></thead>
-              <tbody>${inbTableRows||'<tr><td colspan="5" style="padding:12px;text-align:center;color:var(--muted)">No inbound calls</td></tr>'}</tbody>
-            </table>
-          </div>
-        </div>
+        <!-- Hourly detail table -->
+        <table id="aghr-tbl-${agId}" style="width:100%;border-collapse:collapse;font-size:11px;max-width:500px">
+          <thead><tr>
+            <th style="padding:4px 10px;border-bottom:1px solid var(--border);color:var(--muted);text-align:left">Hour</th>
+            <th style="padding:4px 10px;border-bottom:1px solid var(--border);color:var(--blue);text-align:right">Total</th>
+            <th style="padding:4px 10px;border-bottom:1px solid var(--border);color:var(--green);text-align:right">Answered</th>
+            <th style="padding:4px 10px;border-bottom:1px solid var(--border);color:var(--red);text-align:right">Unanswered</th>
+            <th style="padding:4px 10px;border-bottom:1px solid var(--border);color:var(--orange);text-align:right">Rate</th>
+          </tr></thead>
+          <tbody>${tblRows}</tbody>
+        </table>
       </div>
     </td>
   </tr>`;
@@ -2380,6 +2352,86 @@ function agTab(agId,tab){
     if(active){btn.style.background=t==='inbound'?'#bc8cff':'var(--primary)';btn.style.color='#fff';btn.style.borderColor=t==='inbound'?'#bc8cff':'var(--primary)';}
     else{btn.style.background='transparent';btn.style.color=t==='inbound'?'#bc8cff':'var(--primary)';btn.style.borderColor=t==='inbound'?'rgba(188,140,255,.4)':'rgba(var(--primary-rgb),.4)';}
   });
+}
+
+function exportAgentHourlyPDF(agId, agentName){
+  function doExport(jsPDF){
+    const agRows=FILT.filter(r=>agentOf(r)===agentName);
+    const hrData=Array.from({length:24},(_,h)=>({h,t:0,a:0,u:0}));
+    agRows.forEach(r=>{const h=r._hour;if(h>=0&&h<24){hrData[h].t++;if(r['Status']==='Answered')hrData[h].a++;else hrData[h].u++;}});
+    const active=hrData.filter(d=>d.t>0);
+    const mx=Math.max(...active.map(d=>d.t),1);
+    const dateRange=document.getElementById('data-range')?.textContent||'';
+
+    const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+    // Header
+    doc.setFillColor(13,17,23);
+    doc.rect(0,0,210,30,'F');
+    doc.setFontSize(15);doc.setTextColor(20,174,195);
+    doc.text('Hourly Report',14,12);
+    doc.setFontSize(11);doc.setTextColor(255,255,255);
+    doc.text(agentName,14,20);
+    doc.setFontSize(8);doc.setTextColor(120,130,140);
+    doc.text('Date: '+dateRange,14,27);
+    doc.text('Generated: '+new Date().toLocaleString(),120,27);
+
+    // Summary bar
+    const totalCalls=agRows.length;
+    const totalAns=agRows.filter(r=>r['Status']==='Answered').length;
+    const totalUn=totalCalls-totalAns;
+    const rate=totalCalls?Math.round(totalAns/totalCalls*100):0;
+    doc.setFontSize(9);
+    doc.setTextColor(20,174,195);  doc.text('Total Calls: '+totalCalls, 14, 37);
+    doc.setTextColor(63,185,80);   doc.text('Answered: '+totalAns+' ('+rate+'%)', 55, 37);
+    doc.setTextColor(248,81,73);   doc.text('Unanswered: '+totalUn, 105, 37);
+    doc.setTextColor(248,159,80);  doc.text('Peak Hour: '+(active.length?( h=>{const ampm=h===0?'12am':h<12?h+'am':h===12?'12pm':(h-12)+'pm';return ampm;})(active.reduce((p,c)=>c.t>p.t?c:p,active[0]).h):'—'), 150, 37);
+
+    // Hourly table
+    const head=[['Hour','Total','Answered','Unanswered','Answer Rate','Bar']];
+    const body=active.map(d=>{
+      const ampm=d.h===0?'12am':d.h<12?d.h+'am':d.h===12?'12pm':(d.h-12)+'pm';
+      const r=d.t?Math.round(d.a/d.t*100):0;
+      const isPeak=d.t===mx;
+      return[isPeak?ampm+' ★':ampm, d.t, d.a, d.u, r+'%', '█'.repeat(Math.round(d.t/mx*10))];
+    });
+
+    doc.autoTable({
+      head,body,
+      startY:42,
+      styles:{fontSize:9,cellPadding:3,textColor:[200,210,220],fillColor:[13,17,23],lineColor:[48,54,61],lineWidth:0.3},
+      headStyles:{fillColor:[20,174,195],textColor:[255,255,255],fontStyle:'bold'},
+      alternateRowStyles:{fillColor:[22,27,34]},
+      columnStyles:{0:{fontStyle:'bold'},4:{fontStyle:'bold'},5:{textColor:[48,54,61],font:'courier'}},
+      didParseCell:function(d){
+        if(d.section==='body'){
+          if(d.column.index===1) d.cell.styles.textColor=[20,174,195];
+          if(d.column.index===2) d.cell.styles.textColor=[63,185,80];
+          if(d.column.index===3) d.cell.styles.textColor=[248,81,73];
+          if(d.column.index===4){
+            const v=parseInt(d.cell.raw);
+            d.cell.styles.textColor=v>=60?[63,185,80]:v>=40?[248,159,80]:[248,81,73];
+          }
+          if(d.cell.raw&&String(d.cell.raw).includes('★')){
+            d.cell.styles.textColor=[248,159,80];d.cell.styles.fontStyle='bold';
+          }
+        }
+      },
+      margin:{left:14,right:14}
+    });
+
+    doc.save('hourly-'+agentName.replace(/\s+/g,'-').replace(/[^a-zA-Z0-9-]/g,'')+'-'+new Date().toISOString().slice(0,10)+'.pdf');
+  }
+
+  if(window.jspdf&&window.jspdf.jsPDF&&window.doc_autoTableReady){doExport(window.jspdf.jsPDF);return;}
+  const s1=document.createElement('script');
+  s1.src='https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js';
+  s1.onload=()=>{
+    const s2=document.createElement('script');
+    s2.src='https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js';
+    s2.onload=()=>{window.doc_autoTableReady=true;doExport(window.jspdf.jsPDF);};
+    document.head.appendChild(s2);
+  };
+  document.head.appendChild(s1);
 }
 
 function exportAgentPDF(){
