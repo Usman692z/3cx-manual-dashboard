@@ -644,6 +644,28 @@ tbody tr:hover .sticky{background:var(--card2)}
 <!-- ======= AGENTS ======= -->
 <div class="tab-content" id="tab-agents">
 
+  <div class="kpi-row">
+    <div class="kpi bl"><div class="kpi-lbl">Total Calls</div><div class="kpi-val" id="agp-total">-</div><div class="kpi-sub" id="agp-dr">-</div></div>
+    <div class="kpi gr"><div class="kpi-lbl">Answered</div><div class="kpi-val" id="agp-ans">-</div><div class="kpi-pct" id="agp-ans-p" style="color:var(--green)"></div></div>
+    <div class="kpi rd"><div class="kpi-lbl">Unanswered</div><div class="kpi-val" id="agp-un">-</div><div class="kpi-pct" id="agp-un-p" style="color:var(--red)"></div></div>
+    <div class="kpi or"><div class="kpi-lbl">Answer Rate</div><div class="kpi-val" id="agp-rate">-</div><div class="kpi-sub">of all calls</div></div>
+    <div class="kpi cy"><div class="kpi-lbl">Outbound</div><div class="kpi-val" id="agp-out">-</div><div class="kpi-pct" id="agp-out-p" style="color:var(--cyan)"></div></div>
+    <div class="kpi pk"><div class="kpi-lbl">Inbound</div><div class="kpi-val" id="agp-in">-</div><div class="kpi-pct" id="agp-in-p" style="color:var(--pink)"></div></div>
+    <div class="kpi" style="border-left:3px solid #bc8cff"><div class="kpi-lbl" style="color:#bc8cff">Inbound Total</div><div class="kpi-val" id="agp-inb-total" style="color:#bc8cff">-</div><div class="kpi-sub" id="agp-inb-rate" style="color:var(--muted)"></div></div>
+    <div class="kpi" style="border-left:3px solid var(--green)"><div class="kpi-lbl" style="color:var(--green)">Inbound Answered</div><div class="kpi-val" id="agp-inb-ans" style="color:var(--green)">-</div><div class="kpi-pct" id="agp-inb-ans-p" style="color:var(--green)"></div></div>
+    <div class="kpi" style="border-left:3px solid var(--red)"><div class="kpi-lbl" style="color:var(--red)">Inbound Abandoned</div><div class="kpi-val" id="agp-inb-abn" style="color:var(--red)">-</div><div class="kpi-pct" id="agp-inb-abn-p" style="color:var(--red)"></div></div>
+    <div class="kpi pu"><div class="kpi-lbl">Avg Sentiment</div><div class="kpi-val" id="agp-sent">-</div><div class="kpi-sub">out of 5</div></div>
+    <div class="kpi ye"><div class="kpi-lbl">Avg Talk Time</div><div class="kpi-val" id="agp-talk">-</div><div class="kpi-sub">answered</div></div>
+  </div>
+  <div class="kpi-row" style="margin-bottom:var(--g)">
+    <div class="kpi gr"><div class="kpi-lbl">Completed</div><div class="kpi-val" id="agp-comp">-</div><div class="kpi-pct" id="agp-comp-p" style="color:var(--green)"></div></div>
+    <div class="kpi rd"><div class="kpi-lbl">Declined</div><div class="kpi-val" id="agp-dec">-</div><div class="kpi-pct" id="agp-dec-p" style="color:var(--red)"></div></div>
+    <div class="kpi rd"><div class="kpi-lbl">Wrong Number</div><div class="kpi-val" id="agp-wr">-</div><div class="kpi-pct" id="agp-wr-p" style="color:#ff9090"></div></div>
+    <div class="kpi or"><div class="kpi-lbl">Timed Out</div><div class="kpi-val" id="agp-to">-</div><div class="kpi-pct" id="agp-to-p" style="color:var(--orange)"></div></div>
+    <div class="kpi bl"><div class="kpi-lbl">Num. N/A</div><div class="kpi-val" id="agp-na">-</div><div class="kpi-pct" id="agp-na-p" style="color:var(--muted)"></div></div>
+    <div class="kpi ye"><div class="kpi-lbl">Files Loaded</div><div class="kpi-val" id="agp-files">-</div></div>
+  </div>
+
   <!-- View Mode Toggle -->
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:var(--g);flex-wrap:wrap">
     <span style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">View Mode:</span>
@@ -1775,6 +1797,16 @@ function renderKPIs(){
   setText('k-na',Nfmt(na));     setText('k-na-p',n?(na/n*100).toFixed(1)+'% of calls':'');
   setText('k-files',FILES.length);
   setText('data-range',dF===dT?dF:dF+' to '+dT);
+
+  // Mirror all KPI values into the Agents tab KPI bar (agp-* ids)
+  ['total','dr','ans','ans-p','un','un-p','rate','out','out-p','in','in-p',
+   'inb-total','inb-rate','inb-ans','inb-ans-p','inb-abn','inb-abn-p',
+   'sent','talk','comp','comp-p','dec','dec-p','wr','wr-p','to','to-p','na','na-p','files'
+  ].forEach(suf=>{
+    const src=document.getElementById('k-'+suf);
+    const dst=document.getElementById('agp-'+suf);
+    if(src&&dst) dst.textContent=src.textContent;
+  });
 }
 
 // ============================================================
