@@ -396,6 +396,7 @@ tbody tr:hover .sticky{background:var(--card2)}
       + Add CSV
       <input type="file" id="csv-add" multiple accept="*" style="position:absolute;inset:0;opacity:0;cursor:pointer">
     </label>
+    <button class="btn" onclick="openAgentAdmin()">&#9881; Agents</button>
     <button class="btn btn-primary" onclick="exportCSV()">Export CSV</button>
 <button class="btn" onclick="exportPDF()" style="background:rgba(248,81,73,.12);border-color:rgba(248,81,73,.5);color:#ff9090;font-weight:700">&#128196; Share PDF</button>
     <button class="btn" id="theme-btn" onclick="toggleTheme()" title="Toggle light/dark theme" style="font-size:16px;padding:6px 10px">🌙</button>
@@ -934,6 +935,33 @@ tbody tr:hover .sticky{background:var(--card2)}
 </div><!-- /wrap -->
 </div><!-- /dash -->
 
+<!-- ======= AGENT ADMIN MODAL ======= -->
+<div id="ag-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9998;align-items:center;justify-content:center;padding:20px">
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px 22px;max-width:860px;width:100%;max-height:88vh;overflow:auto">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <h3 style="font-size:16px">&#9881; Agent Settings</h3>
+      <button class="btn" onclick="closeAgentAdmin()">&#10005;</button>
+    </div>
+    <p style="color:var(--muted);font-size:12px;margin-bottom:14px">Naye agents CSV se khud aa jate hain (halke orange row). Department aur Language bhar ke Save karein.</p>
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr>
+        <th style="text-align:left;color:var(--muted);font-size:11px;padding:4px 6px">Ext</th>
+        <th style="text-align:left;color:var(--muted);font-size:11px;padding:4px 6px">Name</th>
+        <th style="text-align:left;color:var(--muted);font-size:11px;padding:4px 6px">Type</th>
+        <th style="text-align:left;color:var(--muted);font-size:11px;padding:4px 6px">Department</th>
+        <th style="text-align:left;color:var(--muted);font-size:11px;padding:4px 6px">Language</th>
+        <th></th>
+      </tr></thead>
+      <tbody id="agm-body"></tbody>
+    </table>
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button class="btn" onclick="addAgentRow()">+ Add Agent</button>
+      <button class="btn btn-primary" onclick="saveAgents()" style="margin-left:auto">Save</button>
+      <button class="btn" onclick="resetAgents()">Reset to Default</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -1350,6 +1378,76 @@ const AGENTS={
   137:{name:'Rumi Shazad',       email:'',                     type:'CS',    lang:'Urdu/Eng',      dept:'Support Calling'},
   154:{name:'Tahir Ameen',       email:'',                     type:'CS',    lang:'Urdu/Eng',      dept:'Support Calling'},
 };
+const AGENTS_DEFAULT=JSON.parse(JSON.stringify(AGENTS));
+(function(){try{
+  const s=JSON.parse(localStorage.getItem('agents3cx'));
+  if(s&&typeof s==='object'){Object.keys(AGENTS).forEach(k=>delete AGENTS[k]);Object.assign(AGENTS,s);}
+}catch(e){}})();
+
+// New extensions seen in loaded CSVs get auto-added (blank dept/type/lang) so admin only fills those in
+function autoRegisterAgents(){
+  let added=false;
+  ALL_AGENTS.forEach(raw=>{
+    const ext=agentExt(raw);
+    if(ext&&!AGENTS[ext]){
+      AGENTS[ext]={name:raw.replace(/\s*\(\d+\)\s*$/,'').trim()||raw,email:'',type:'',lang:'',dept:''};
+      added=true;
+    }
+  });
+  if(added) localStorage.setItem('agents3cx',JSON.stringify(AGENTS));
+}
+
+// ============================================================
+//  AGENT ADMIN
+// ============================================================
+const AGM_IN='background:var(--card2);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:5px;font-size:12px;font-family:inherit;width:100%';
+function agRowHtml(ext,a){
+  a=a||{};
+  const needsInfo=a.name&&(!a.dept||!a.lang);
+  return '<tr'+(needsInfo?' style="background:rgba(210,153,34,.12)" title="New agent — set department & language"':'')+'>'+
+    '<td style="padding:3px 6px;width:70px"><input data-f="ext" value="'+esc(ext)+'" style="'+AGM_IN+'"></td>'+
+    '<td style="padding:3px 6px"><input data-f="name" value="'+esc(a.name||'')+'" style="'+AGM_IN+'"></td>'+
+    '<td style="padding:3px 6px;width:100px"><input data-f="type" value="'+esc(a.type||'')+'" placeholder="CS / Admin" style="'+AGM_IN+'"></td>'+
+    '<td style="padding:3px 6px;width:150px"><input data-f="dept" value="'+esc(a.dept||'')+'" placeholder="Customer Care" style="'+AGM_IN+'"></td>'+
+    '<td style="padding:3px 6px;width:150px"><input data-f="lang" value="'+esc(a.lang||'')+'" placeholder="Urdu/Eng" style="'+AGM_IN+'"></td>'+
+    '<td style="padding:3px 6px;width:36px"><button class="btn" onclick="this.closest(\'tr\').remove()" title="Remove">&#10005;</button></td>'+
+  '</tr>';
+}
+function openAgentAdmin(){
+  document.getElementById('agm-body').innerHTML=Object.entries(AGENTS).map(([e,a])=>agRowHtml(e,a)).join('');
+  document.getElementById('ag-modal').style.display='flex';
+}
+function closeAgentAdmin(){document.getElementById('ag-modal').style.display='none'}
+function addAgentRow(){
+  document.getElementById('agm-body').insertAdjacentHTML('beforeend',agRowHtml('',null));
+  const rows=document.querySelectorAll('#agm-body tr');
+  rows[rows.length-1].querySelector('[data-f="ext"]').focus();
+}
+function saveAgents(){
+  const map={};let bad=false;
+  document.querySelectorAll('#agm-body tr').forEach(tr=>{
+    const g=f=>tr.querySelector('[data-f="'+f+'"]').value.trim();
+    const ext=g('ext'),name=g('name');
+    tr.style.background='';
+    if(!ext&&!name)return; // empty row — skip
+    if(!/^\d+$/.test(ext)||!name){bad=true;tr.style.background='rgba(248,81,73,.15)';return;}
+    map[ext]={name:name,email:(AGENTS[ext]&&AGENTS[ext].email)||'',type:g('type'),dept:g('dept'),lang:g('lang')};
+  });
+  if(bad){toast('Extension (sirf numbers) aur Name dono zaroori hain','err');return;}
+  Object.keys(AGENTS).forEach(k=>delete AGENTS[k]);Object.assign(AGENTS,map);
+  localStorage.setItem('agents3cx',JSON.stringify(map));
+  closeAgentAdmin();
+  if(RAW.length){buildFilters();applyFilters();}
+  toast(Object.keys(map).length+' agents saved','ok');
+}
+function resetAgents(){
+  localStorage.removeItem('agents3cx');
+  Object.keys(AGENTS).forEach(k=>delete AGENTS[k]);Object.assign(AGENTS,JSON.parse(JSON.stringify(AGENTS_DEFAULT)));
+  openAgentAdmin();
+  if(RAW.length){buildFilters();applyFilters();}
+  toast('Default agents restored','ok');
+}
+
 function agentExt(name){const m=String(name||'').match(/\((\d+)\)/);return m?parseInt(m[1]):null}
 function agentLang(name){const e=agentExt(name);return(e&&AGENTS[e])?AGENTS[e].lang:''}
 function agentType(name){const e=agentExt(name);return(e&&AGENTS[e])?AGENTS[e].type:''}
@@ -1385,6 +1483,7 @@ function isAgent(a){
 // ============================================================
 function buildFilters(){
   ALL_AGENTS=[...new Set(RAW.map(agentOf).filter(isAgent))].sort();
+  autoRegisterAgents();
 
   buildMsList();
   fillSel('f-dir',[...new Set(RAW.map(r=>(r['Direction']||'').trim()).filter(Boolean))].sort(),'All');
