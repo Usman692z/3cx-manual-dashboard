@@ -417,6 +417,7 @@ tbody tr:hover .sticky{background:var(--card2)}
   <button class="tab" onclick="switchTab('agents')">Agent Performance</button>
   <button class="tab" onclick="switchTab('analysis')">Deep Analysis</button>
   <button class="tab" onclick="switchTab('calls')">Call Log</button>
+  <button class="tab" onclick="switchTab('inbound')">Inbound Report</button>
   <button class="tab" onclick="switchTab('abandoned')" style="position:relative">Abandoned Calls <span id="ab-badge" style="background:var(--red);color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:20px;margin-left:4px;vertical-align:middle">0</span></button>
 </div>
 
@@ -889,6 +890,31 @@ tbody tr:hover .sticky{background:var(--card2)}
   </div>
 </div><!-- /calls -->
 
+<!-- ======= INBOUND REPORT ======= -->
+<div class="tab-content" id="tab-inbound">
+  <div class="kpi-row" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin-bottom:var(--g)">
+    <div class="kpi pk"><div class="kpi-lbl">Total Inbound</div><div class="kpi-val" id="ir-total">0</div><div class="kpi-sub">calls + queue legs</div></div>
+    <div class="kpi gr"><div class="kpi-lbl">Answered by Agent</div><div class="kpi-val" id="ir-ans-agent">0</div><div class="kpi-sub" id="ir-rate">-</div></div>
+    <div class="kpi cy"><div class="kpi-lbl">Answered by IVR/Queue</div><div class="kpi-val" id="ir-ans-system">0</div><div class="kpi-sub">auto greeting/menu, no agent</div></div>
+    <div class="kpi rd"><div class="kpi-lbl">Abandoned</div><div class="kpi-val" id="ir-abn">0</div><div class="kpi-sub">unanswered inbound</div></div>
+    <div class="kpi or"><div class="kpi-lbl">Assigned to Agent</div><div class="kpi-val" id="ir-assigned">0</div><div class="kpi-sub">via Abandoned tab</div></div>
+    <div class="kpi bl"><div class="kpi-lbl">Unassigned (Queue)</div><div class="kpi-val" id="ir-unassigned">0</div><div class="kpi-sub">never reached an agent</div></div>
+  </div>
+  <div class="tcard">
+    <h3>Inbound Calls by Agent — Picked vs Abandoned <span class="cnt" id="ir-cnt"></span></h3>
+    <div class="tbl-wrap"><table>
+      <thead><tr>
+        <th>Agent</th><th>Department</th>
+        <th style="text-align:right">Picked (Answered)</th>
+        <th style="text-align:right">Total Inbound</th>
+        <th style="text-align:right">Pick Rate</th>
+        <th style="text-align:right">Abandoned (Assigned)</th>
+      </tr></thead>
+      <tbody id="ir-body"><tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px">Load data to see inbound report</td></tr></tbody>
+    </table></div>
+  </div>
+</div><!-- /inbound -->
+
 <!-- ======= ABANDONED CALLS ======= -->
 <div class="tab-content" id="tab-abandoned">
   <div class="kpi-row" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin-bottom:var(--g)">
@@ -1268,11 +1294,14 @@ function finish(newRows){
     toast('No valid data found — check the error message above','err');
     return;
   }
-  // Merge + deduplicate by Call ID
+  // Merge + deduplicate by Call ID + To + Call Time — a single Call ID
+  // spans multiple legs (IVR → queue → agent); keying on Call ID alone
+  // collapsed those legs into one row and lost the agent-answered leg.
   const map=new Map();
   [...RAW,...newRows].forEach(r=>{
     const cid=(r['Call ID']||'').trim()||Math.random().toString(36);
-    map.set(cid,r);
+    const key=cid+'|'+(r['To']||'').trim()+'|'+(r['Call Time']||'').trim();
+    map.set(key,r);
   });
   RAW=Array.from(map.values()).sort((a,b)=>a._dt-b._dt);
 
@@ -1632,6 +1661,57 @@ function renderAll(){
   buildMTD();
   buildMonthly();
   AB_PG=0;renderAbandoned();
+  renderInboundReport();
+}
+
+// ============================================================
+//  INBOUND REPORT (Picked vs Abandoned, per agent)
+// ============================================================
+function renderInboundReport(){
+  const inbRows=FILT.filter(r=>{const d=(r['Direction']||'').trim();return d==='Inbound'||d==='Inbound Queue';});
+  const totalInb=inbRows.length;
+  const ansRows=inbRows.filter(r=>r['Status']==='Answered');
+  // Split "Answered" into live-agent pickups vs the IVR/queue auto-answering the greeting/menu
+  const ansAgentRows=ansRows.filter(r=>isAgent(agentOf(r)));
+  const ansAgent=ansAgentRows.length;
+  const ansSystem=ansRows.length-ansAgent;
+  const abnInb=inbRows.filter(r=>r['Status']==='Unanswered').length;
+  setText('ir-total',Nfmt(totalInb));
+  setText('ir-ans-agent',Nfmt(ansAgent));
+  setText('ir-rate',totalInb?Math.round(ansAgent/totalInb*100)+'% reached a live agent':'-');
+  setText('ir-ans-system',Nfmt(ansSystem));
+  setText('ir-abn',Nfmt(abnInb));
+
+  // Abandoned calls assigned to an agent (from the Abandoned Calls tab) vs still sitting in queue
+  const abandoned=getAbandoned();
+  const assignedMap={};
+  let assignedCount=0,unassignedCount=0;
+  abandoned.forEach(r=>{
+    const cid=(r['Call ID']||'').trim()||r._dt.getTime();
+    const ag=ABANDONED_ASSIGNMENTS[cid]?.agent;
+    if(ag&&ag!=='Unassigned'){assignedMap[ag]=(assignedMap[ag]||0)+1;assignedCount++}
+    else unassignedCount++;
+  });
+  setText('ir-assigned',Nfmt(assignedCount));
+  setText('ir-unassigned',Nfmt(unassignedCount));
+
+  const data=AG.map(a=>({...a,abn_assigned:assignedMap[a.agent]||0}))
+    .filter(a=>a.inbound>0||a.abn_assigned>0)
+    .sort((a,b)=>b.inbound_ans-a.inbound_ans);
+
+  setText('ir-cnt',data.length+' agents');
+  document.getElementById('ir-body').innerHTML=data.map(a=>{
+    const rate=a.inbound?Math.round(a.inbound_ans/a.inbound*100):0;
+    const rc=rate>=60?'var(--green)':rate>=40?'var(--orange)':'var(--red)';
+    return`<tr>
+      <td style="font-weight:700">${esc(a.agent)}</td>
+      <td>${deptBadge(a.dept)}</td>
+      <td style="text-align:right;color:var(--green);font-weight:700">${a.inbound_ans}</td>
+      <td style="text-align:right;color:var(--muted)">${a.inbound}</td>
+      <td style="text-align:right;font-weight:700;color:${rc}">${rate}%</td>
+      <td style="text-align:right;color:${a.abn_assigned?'var(--red)':'var(--muted)'};font-weight:${a.abn_assigned?700:400}">${a.abn_assigned||0}</td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px">No inbound data in current filter</td></tr>';
 }
 
 // ============================================================
@@ -3388,7 +3468,7 @@ function renderFileBar(){
 //  TABS
 // ============================================================
 function switchTab(name){
-  const tabs=['overview','agents','analysis','calls','abandoned'];
+  const tabs=['overview','agents','analysis','calls','inbound','abandoned'];
   document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',tabs[i]===name));
   document.querySelectorAll('.tab-content').forEach(c=>c.classList.toggle('active',c.id==='tab-'+name));
 }
@@ -3738,6 +3818,7 @@ function assignCB(cid,agent){
   if(!ABANDONED_ASSIGNMENTS[cid])ABANDONED_ASSIGNMENTS[cid]={};
   ABANDONED_ASSIGNMENTS[cid].agent=agent;
   renderAbandoned();
+  renderInboundReport();
 }
 function noteCB(cid,notes){
   if(!ABANDONED_ASSIGNMENTS[cid])ABANDONED_ASSIGNMENTS[cid]={};
@@ -3750,6 +3831,7 @@ function markAllAssigned(){
     if(!ABANDONED_ASSIGNMENTS[cid].agent)ABANDONED_ASSIGNMENTS[cid].agent='Unassigned';
   });
   renderAbandoned();
+  renderInboundReport();
 }
 function abPrev(){if(AB_PG>0){AB_PG--;renderAbandoned()}}
 function abNext(){if((AB_PG+1)*AB_PSZ<getAbandoned().length){AB_PG++;renderAbandoned()}}
