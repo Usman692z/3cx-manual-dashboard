@@ -901,16 +901,19 @@ tbody tr:hover .sticky{background:var(--card2)}
     <div class="kpi bl"><div class="kpi-lbl">Unassigned (Queue)</div><div class="kpi-val" id="ir-unassigned">0</div><div class="kpi-sub">never reached an agent</div></div>
   </div>
   <div class="tcard">
-    <h3>Inbound Calls by Agent — Picked vs Abandoned <span class="cnt" id="ir-cnt"></span></h3>
+    <h3>Inbound Calls by Agent — Picked vs Abandoned <span class="cnt" id="ir-cnt"></span>
+      <span style="margin-left:auto;font-size:11px;color:var(--muted);font-weight:400">Click a row for call-by-call detail</span>
+    </h3>
     <div class="tbl-wrap"><table>
       <thead><tr>
         <th>Agent</th><th>Department</th>
         <th style="text-align:right">Picked (Answered)</th>
         <th style="text-align:right">Total Inbound</th>
         <th style="text-align:right">Pick Rate</th>
+        <th style="text-align:right">Avg Talk Time</th>
         <th style="text-align:right">Abandoned (Assigned)</th>
       </tr></thead>
-      <tbody id="ir-body"><tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px">Load data to see inbound report</td></tr></tbody>
+      <tbody id="ir-body"><tr><td colspan="7" style="text-align:center;color:var(--muted);padding:24px">Load data to see inbound report</td></tr></tbody>
     </table></div>
   </div>
 </div><!-- /inbound -->
@@ -1703,15 +1706,66 @@ function renderInboundReport(){
   document.getElementById('ir-body').innerHTML=data.map(a=>{
     const rate=a.inbound?Math.round(a.inbound_ans/a.inbound*100):0;
     const rc=rate>=60?'var(--green)':rate>=40?'var(--orange)':'var(--red)';
-    return`<tr>
-      <td style="font-weight:700">${esc(a.agent)}</td>
+    const inbAnsRows=agentInboundAnsweredRows(a.agent);
+    const talkS=inbAnsRows.reduce((s,r)=>s+r._ts,0);
+    const avgTalk=inbAnsRows.length?sfmt(talkS/inbAnsRows.length):'—';
+    const irId='ir_'+a.agent.replace(/\W/g,'_');
+    return`<tr id="irr-${irId}" style="cursor:pointer" onclick="toggleIrExpand('${irId}','${esc(a.agent).replace(/'/g,"&#39;")}')" title="Click to see individual calls">
+      <td style="font-weight:700">${IR_OPEN[irId]?'▾':'▸'} ${esc(a.agent)}</td>
       <td>${deptBadge(a.dept)}</td>
       <td style="text-align:right;color:var(--green);font-weight:700">${a.inbound_ans}</td>
       <td style="text-align:right;color:var(--muted)">${a.inbound}</td>
       <td style="text-align:right;font-weight:700;color:${rc}">${rate}%</td>
+      <td style="text-align:right;color:var(--blue)">${avgTalk}</td>
       <td style="text-align:right;color:${a.abn_assigned?'var(--red)':'var(--muted)'};font-weight:${a.abn_assigned?700:400}">${a.abn_assigned||0}</td>
+    </tr>`+(IR_OPEN[irId]?irDetailRow(irId,a.agent,inbAnsRows):'');
+  }).join('')||'<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:24px">No inbound data in current filter</td></tr>';
+}
+
+function agentInboundAnsweredRows(agentName){
+  return FILT.filter(r=>{
+    const d=(r['Direction']||'').trim();
+    if(d!=='Inbound'&&d!=='Inbound Queue')return false;
+    if(r['Status']!=='Answered')return false;
+    return agentOf(r)===agentName;
+  }).sort((a,b)=>b._dt-a._dt);
+}
+
+let IR_OPEN={};
+function toggleIrExpand(irId,agentName){
+  IR_OPEN[irId]=!IR_OPEN[irId];
+  renderInboundReport();
+}
+
+function irDetailRow(irId,agentName,rows){
+  const body=rows.map(r=>{
+    const t=(r['Call Time']||'').toString().replace('T',' ').slice(0,16);
+    const from=(r['From']||'-').toString().trim();
+    const dur=r._ts>0?sfmt(r._ts):'-';
+    const res=r._result||'-';
+    return`<tr style="border-bottom:1px solid rgba(48,54,61,.2)">
+      <td style="padding:4px 10px;font-size:11px;color:var(--muted)">${esc(t)}</td>
+      <td style="padding:4px 10px;font-size:11px;color:var(--cyan)">${esc(from)}</td>
+      <td style="padding:4px 10px;font-size:11px;color:var(--blue);font-weight:600">${dur}</td>
+      <td style="padding:4px 10px;font-size:11px;color:var(--text)">${esc(res)}</td>
     </tr>`;
-  }).join('')||'<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px">No inbound data in current filter</td></tr>';
+  }).join('')||`<tr><td colspan="4" style="padding:10px;text-align:center;color:var(--muted);font-size:11px">No answered inbound calls</td></tr>`;
+  return`<tr id="irx-${irId}" style="background:var(--card2)">
+    <td colspan="7" style="padding:0;border-bottom:2px solid var(--primary)33">
+      <div style="padding:10px 18px">
+        <div style="font-size:11px;font-weight:800;color:var(--primary);margin-bottom:6px">📞 Calls answered by ${esc(agentName)} (${rows.length})</div>
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr>
+            <th style="padding:4px 10px;text-align:left;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border)">Call Time</th>
+            <th style="padding:4px 10px;text-align:left;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border)">Caller Number</th>
+            <th style="padding:4px 10px;text-align:left;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border)">Duration</th>
+            <th style="padding:4px 10px;text-align:left;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border)">Result</th>
+          </tr></thead>
+          <tbody>${body}</tbody>
+        </table>
+      </div>
+    </td>
+  </tr>`;
 }
 
 // ============================================================
