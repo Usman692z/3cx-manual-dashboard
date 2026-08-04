@@ -849,6 +849,43 @@ tbody tr:hover .sticky{background:var(--card2)}
       </div>
     </div>
   </div>
+
+  <div class="tcard">
+    <h3>Call Volume Heatmap <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted);font-size:11px">— Day &times; Month</span></h3>
+    <div class="hm-btns">
+      <button class="hm-btn active" id="dm-total" onclick="setDm('total')">Total</button>
+      <button class="hm-btn" id="dm-ans"   onclick="setDm('ans')">Answered</button>
+      <button class="hm-btn" id="dm-un"    onclick="setDm('un')">Unanswered</button>
+      <button class="hm-btn" id="dm-rate"  onclick="setDm('rate')">Answer Rate %</button>
+    </div>
+    <div class="hm-wrap"><table class="hm-table" id="dm-tbl"></table></div>
+    <div class="hm-legend"><span>Low</span><div class="hm-legend-bar" id="dm-leg"></div><span>High</span></div>
+
+    <!-- Day x Month Drill-Down Panel -->
+    <div id="dm-drill" style="display:none;margin-top:14px;border-top:2px solid var(--primary);padding-top:14px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+        <span id="dm-drill-title" style="font-size:14px;font-weight:800;color:var(--primary)">—</span>
+        <div id="dm-drill-kpis" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+        <button onclick="document.getElementById('dm-drill').style.display='none'" style="margin-left:auto;background:rgba(248,81,73,.12);border:1px solid rgba(248,81,73,.4);color:#ff9090;padding:3px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-family:inherit">✕ Close</button>
+      </div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead><tr>
+            <th style="padding:6px 10px;border-bottom:1px solid var(--border);color:var(--muted);text-align:left;white-space:nowrap">Time</th>
+            <th style="padding:6px 10px;border-bottom:1px solid var(--border);color:var(--muted);text-align:left">Agent</th>
+            <th style="padding:6px 10px;border-bottom:1px solid var(--border);color:var(--muted);text-align:left">From</th>
+            <th style="padding:6px 10px;border-bottom:1px solid var(--border);color:var(--muted);text-align:left">To</th>
+            <th style="padding:6px 10px;border-bottom:1px solid var(--border);color:var(--muted)">Direction</th>
+            <th style="padding:6px 10px;border-bottom:1px solid var(--border);color:var(--green)">Status</th>
+            <th style="padding:6px 10px;border-bottom:1px solid var(--border);color:var(--muted)">Result</th>
+            <th style="padding:6px 10px;border-bottom:1px solid var(--border);color:var(--muted)">Talk</th>
+          </tr></thead>
+          <tbody id="dm-drill-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <div class="chart-grid g2">
     <div class="chart-card"><h3>Weekday — Result Mix</h3><canvas id="ch-wd-stk" style="max-height:280px"></canvas></div>
     <div class="chart-card"><h3>Hour — Answered vs Unanswered</h3><canvas id="ch-hr-stk" style="max-height:280px"></canvas></div>
@@ -1094,6 +1131,7 @@ let AB_PG=0; const AB_PSZ=50;
 let TRANS_MAP={}; // key→{s:summary,t:transcription} for current page
 let CH={};
 let HM_MODE='total';
+let DM_MODE='total';
 let FT=null;
 let chartJsReady=false;
 let ABANDONED_ASSIGNMENTS={};
@@ -2927,7 +2965,7 @@ function exportAllAgentsHourlyPDF(){
 // ============================================================
 //  DEEP ANALYSIS
 // ============================================================
-function renderAnalysis(){buildHeatmap();buildWdStk();buildHrStk();buildScoring()}
+function renderAnalysis(){buildHeatmap();buildDayMonthHeatmap();buildWdStk();buildHrStk();buildScoring()}
 
 function setHm(m){
   HM_MODE=m;
@@ -2964,6 +3002,90 @@ function buildHeatmap(){
 
 function heatCol(t){t=Math.max(0,Math.min(1,t));if(t===0)return'#161b22';const r=Math.round(t*220),g2=Math.round(t*100);return'rgba('+r+','+g2+',0,0.85)'}
 function rateCol(p){return p===0?'#161b22':p<40?'rgba(248,81,73,.65)':p<60?'rgba(210,153,34,.7)':'rgba(63,185,80,.65)'}
+
+// ============================================================
+//  HEATMAP — DAY x MONTH
+// ============================================================
+function setDm(m){
+  DM_MODE=m;
+  ['total','ans','un','rate'].forEach(x=>document.getElementById('dm-'+x).classList.toggle('active',x===m));
+  buildDayMonthHeatmap();
+}
+
+function dmMonthLabel(m){const[y,mm]=m.split('-');return new Date(+y,+mm-1,1).toLocaleString('en',{month:'short'})+' '+y}
+
+function buildDayMonthHeatmap(){
+  const months=[...new Set(FILT.map(r=>r._date?r._date.slice(0,7):null).filter(Boolean))].sort();
+  const tbl=document.getElementById('dm-tbl');
+  if(!months.length){tbl.innerHTML='';return}
+  const g={};months.forEach(m=>{g[m]={};for(let d=1;d<=31;d++)g[m][d]={t:0,a:0,u:0}});
+  FILT.forEach(r=>{
+    if(!r._date)return;
+    const m=r._date.slice(0,7),d=parseInt(r._date.slice(8,10),10);
+    if(g[m]&&g[m][d]){g[m][d].t++;if(r['Status']==='Answered')g[m][d].a++;if(r['Status']==='Unanswered')g[m][d].u++}
+  });
+  const vals=[];months.forEach(m=>{for(let d=1;d<=31;d++){const c=g[m][d];vals.push(DM_MODE==='total'?c.t:DM_MODE==='ans'?c.a:DM_MODE==='un'?c.u:c.t?(c.a/c.t*100):0)}});
+  const mx=Math.max(...vals,1);
+
+  let html='<thead><tr><th class="rl">Day</th>';
+  months.forEach(m=>html+='<th>'+dmMonthLabel(m)+'</th>');
+  html+='</tr></thead><tbody>';
+  for(let d=1;d<=31;d++){
+    html+='<tr><th class="rl">'+d+'</th>';
+    months.forEach(m=>{
+      const c=g[m][d];
+      let v=DM_MODE==='total'?c.t:DM_MODE==='ans'?c.a:DM_MODE==='un'?c.u:c.t?Math.round(c.a/c.t*100):0;
+      const pct=v/mx;
+      const bg=DM_MODE==='rate'?rateCol(v):heatCol(pct);
+      const fg=pct>0.45?'#fff':'#8b949e';
+      html+='<td class="hm-cell" style="background:'+bg+';color:'+fg+';cursor:'+(v?'pointer':'default')+'" title="'+dmMonthLabel(m)+' '+d+' — '+(DM_MODE==='rate'?v+'%':v)+'" onclick="'+(v?'openDmDrill(\''+m+'\','+d+')':'')+'">'+(v||'')+'</td>';
+    });
+    html+='</tr>';
+  }
+  html+='</tbody>';
+  tbl.innerHTML=html;
+  const leg=document.getElementById('dm-leg');leg.innerHTML='';
+  for(let i=0;i<=10;i++){const s=document.createElement('span');s.style.background=DM_MODE==='rate'?rateCol(i*10):heatCol(i/10);leg.appendChild(s)}
+}
+
+function openDmDrill(monthKey,day){
+  const panel=document.getElementById('dm-drill');
+  const dd=day<10?'0'+day:''+day;
+  const dateStr=monthKey+'-'+dd;
+  const rows=FILT.filter(r=>r._date===dateStr);
+  if(!rows.length)return;
+
+  document.getElementById('dm-drill-title').textContent='📍 '+dateStr+' ('+rows.length+' calls)';
+  const ans=rows.filter(r=>r['Status']==='Answered').length;
+  const unans=rows.filter(r=>r['Status']==='Unanswered').length;
+  const rate=rows.length?Math.round(ans/rows.length*100):0;
+  const rc=rate>=60?'var(--green)':rate>=40?'var(--orange)':'var(--red)';
+  document.getElementById('dm-drill-kpis').innerHTML=
+    '<span style="background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.3);color:var(--blue);font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px">Total: '+rows.length+'</span>'+
+    '<span style="background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.3);color:var(--green);font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px">✔ Answered: '+ans+'</span>'+
+    '<span style="background:rgba(248,81,73,.12);border:1px solid rgba(248,81,73,.3);color:var(--red);font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px">✘ Unanswered: '+unans+'</span>'+
+    '<span style="background:rgba(248,159,80,.12);border:1px solid rgba(248,159,80,.3);font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;color:'+rc+'">Rate: '+rate+'%</span>';
+
+  const sorted=[...rows].sort((a,b)=>a._dt-b._dt);
+  document.getElementById('dm-drill-body').innerHTML=sorted.map(r=>{
+    const isAns=r['Status']==='Answered';
+    const ct=(r['Call Time']||'').toString();
+    const timeOnly=ct.includes('T')?ct.split('T')[1]?.slice(0,8):ct.slice(11,19);
+    return'<tr style="border-bottom:1px solid rgba(48,54,61,.4);'+(isAns?'':'opacity:.75')+'">'+
+      '<td style="padding:5px 10px;color:var(--muted);white-space:nowrap;font-size:11px">'+esc(timeOnly||ct.slice(0,19))+'</td>'+
+      '<td style="padding:5px 10px;font-weight:600;white-space:nowrap">'+esc(agentOf(r)||'—')+'</td>'+
+      '<td style="padding:5px 10px;color:var(--muted);white-space:nowrap;max-width:130px;overflow:hidden;text-overflow:ellipsis">'+esc(r['From']||'—')+'</td>'+
+      '<td style="padding:5px 10px;color:var(--muted);white-space:nowrap;max-width:130px;overflow:hidden;text-overflow:ellipsis">'+esc(r['To']||'—')+'</td>'+
+      '<td style="padding:5px 10px;text-align:center">'+dirTag(r['Direction']||'')+'</td>'+
+      '<td style="padding:5px 10px;text-align:center">'+stTag(r['Status']||'')+'</td>'+
+      '<td style="padding:5px 10px;text-align:center">'+crTag(r._result)+'</td>'+
+      '<td style="padding:5px 10px;text-align:right;color:'+(r._ts>0?'var(--text)':'var(--muted)')+'">'+esc(r['Talking']||'—')+'</td>'+
+    '</tr>';
+  }).join('');
+
+  panel.style.display='block';
+  panel.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
 
 function openHmDrill(wd,h){
   const panel=document.getElementById('hm-drill');
