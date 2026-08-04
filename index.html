@@ -3030,8 +3030,11 @@ function buildDayMonthHeatmap(){
   let html='<thead><tr><th class="rl">Day</th>';
   months.forEach(m=>html+='<th>'+dmMonthLabel(m)+'</th>');
   html+='</tr></thead><tbody>';
+  const WD_SHORT=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   for(let d=1;d<=31;d++){
-    html+='<tr><th class="rl">'+d+'</th>';
+    // Weekday shown is relative to the first month column — exact when only one month is loaded
+    const wd=WD_SHORT[new Date(+months[0].slice(0,4),+months[0].slice(5,7)-1,d).getDay()];
+    html+='<tr><th class="rl" style="min-width:52px">'+d+' <span style="color:var(--muted);font-weight:400">'+wd+'</span></th>';
     months.forEach(m=>{
       const c=g[m][d];
       let v=DM_MODE==='total'?c.t:DM_MODE==='ans'?c.a:DM_MODE==='un'?c.u:c.t?Math.round(c.a/c.t*100):0;
