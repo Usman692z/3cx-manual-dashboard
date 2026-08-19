@@ -930,12 +930,12 @@ tbody tr:hover .sticky{background:var(--card2)}
 <!-- ======= INBOUND REPORT ======= -->
 <div class="tab-content" id="tab-inbound">
   <div class="kpi-row" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin-bottom:var(--g)">
-    <div class="kpi pk"><div class="kpi-lbl">Total Inbound</div><div class="kpi-val" id="ir-total">0</div><div class="kpi-sub">calls + queue legs</div></div>
-    <div class="kpi gr"><div class="kpi-lbl">Answered by Agent</div><div class="kpi-val" id="ir-ans-agent">0</div><div class="kpi-sub" id="ir-rate">-</div></div>
-    <div class="kpi cy"><div class="kpi-lbl">Answered by IVR/Queue</div><div class="kpi-val" id="ir-ans-system">0</div><div class="kpi-sub">auto greeting/menu, no agent</div></div>
-    <div class="kpi rd"><div class="kpi-lbl">Abandoned</div><div class="kpi-val" id="ir-abn">0</div><div class="kpi-sub">unanswered inbound</div></div>
-    <div class="kpi or"><div class="kpi-lbl">Assigned to Agent</div><div class="kpi-val" id="ir-assigned">0</div><div class="kpi-sub">via Abandoned tab</div></div>
-    <div class="kpi bl"><div class="kpi-lbl">Unassigned (Queue)</div><div class="kpi-val" id="ir-unassigned">0</div><div class="kpi-sub">never reached an agent</div></div>
+    <div class="kpi pk" style="cursor:pointer" title="Click for call-by-call details" onclick="openIrKpiDetail('total')"><div class="kpi-lbl">Total Inbound</div><div class="kpi-val" id="ir-total">0</div><div class="kpi-sub">calls + queue legs</div></div>
+    <div class="kpi gr" style="cursor:pointer" title="Click for call-by-call details" onclick="openIrKpiDetail('ans-agent')"><div class="kpi-lbl">Answered by Agent</div><div class="kpi-val" id="ir-ans-agent">0</div><div class="kpi-sub" id="ir-rate">-</div></div>
+    <div class="kpi cy" style="cursor:pointer" title="Click for call-by-call details" onclick="openIrKpiDetail('ans-system')"><div class="kpi-lbl">Answered by IVR/Queue</div><div class="kpi-val" id="ir-ans-system">0</div><div class="kpi-sub">auto greeting/menu, no agent</div></div>
+    <div class="kpi rd" style="cursor:pointer" title="Click for call-by-call details" onclick="openIrKpiDetail('abn')"><div class="kpi-lbl">Abandoned</div><div class="kpi-val" id="ir-abn">0</div><div class="kpi-sub">unanswered inbound</div></div>
+    <div class="kpi or" style="cursor:pointer" title="Click for call-by-call details" onclick="openIrKpiDetail('assigned')"><div class="kpi-lbl">Assigned to Agent</div><div class="kpi-val" id="ir-assigned">0</div><div class="kpi-sub">via Abandoned tab</div></div>
+    <div class="kpi bl" style="cursor:pointer" title="Click for call-by-call details" onclick="openIrKpiDetail('unassigned')"><div class="kpi-lbl">Unassigned (Queue)</div><div class="kpi-val" id="ir-unassigned">0</div><div class="kpi-sub">never reached an agent</div></div>
   </div>
   <div class="tcard">
     <h3>Inbound Calls by Agent — Picked vs Abandoned <span class="cnt" id="ir-cnt"></span>
@@ -1758,6 +1758,75 @@ function renderInboundReport(){
       <td style="text-align:right;color:${a.abn_assigned?'var(--red)':'var(--muted)'};font-weight:${a.abn_assigned?700:400}">${a.abn_assigned||0}</td>
     </tr>`+(IR_OPEN[irId]?irDetailRow(irId,a.agent,inbAnsRows):'');
   }).join('')||'<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:24px">No inbound data in current filter</td></tr>';
+}
+
+const IR_KPI_LABELS={total:'Total Inbound',ans_agent:'Answered by Agent',ans_system:'Answered by IVR/Queue',abn:'Abandoned',assigned:'Assigned to Agent',unassigned:'Unassigned (Queue)'};
+function irKpiRows(kind){
+  const inbRows=FILT.filter(r=>{const d=(r['Direction']||'').trim();return d==='Inbound'||d==='Inbound Queue';});
+  if(kind==='total')return inbRows;
+  if(kind==='ans_agent')return inbRows.filter(r=>r['Status']==='Answered'&&isAgent(agentOf(r)));
+  if(kind==='ans_system')return inbRows.filter(r=>r['Status']==='Answered'&&!isAgent(agentOf(r)));
+  if(kind==='abn')return inbRows.filter(r=>r['Status']==='Unanswered');
+  if(kind==='assigned'||kind==='unassigned'){
+    return getAbandoned().filter(r=>{
+      const cid=(r['Call ID']||'').trim()||r._dt.getTime();
+      const isAssigned=!!(ABANDONED_ASSIGNMENTS[cid]?.agent&&ABANDONED_ASSIGNMENTS[cid].agent!=='Unassigned');
+      return kind==='assigned'?isAssigned:!isAssigned;
+    });
+  }
+  return[];
+}
+function openIrKpiDetail(kind){
+  kind=kind.replace(/-/g,'_');
+  const rows=irKpiRows(kind).slice().sort((a,b)=>b._dt-a._dt);
+  const label=IR_KPI_LABELS[kind]||kind;
+  const ringSecs=rows.map(r=>r._rs).filter(s=>s>0);
+  const avgRing=ringSecs.length?sfmt(ringSecs.reduce((a,b)=>a+b,0)/ringSecs.length):'—';
+  const talkSecs=rows.map(r=>r._ts).filter(s=>s>0);
+  const avgTalk=talkSecs.length?sfmt(talkSecs.reduce((a,b)=>a+b,0)/talkSecs.length):'—';
+  const showAssignCol=kind==='assigned'||kind==='unassigned';
+  const bodyRows=rows.map(r=>{
+    const cid=(r['Call ID']||'').trim()||(r._dt?r._dt.getTime():'');
+    const agent=showAssignCol?(ABANDONED_ASSIGNMENTS[cid]?.agent||'—'):(agentOf(r)||'—');
+    return`<tr>
+      <td>${esc(r['Call Time']||'')}</td>
+      <td>${esc(r['From']||'-')}</td>
+      <td>${esc(r['To']||'-')}</td>
+      <td>${esc(agent)}</td>
+      <td>${r._rs>0?sfmt(r._rs):esc(r['Ringing']||'-')}</td>
+      <td>${r._ts>0?sfmt(r._ts):esc(r['Talking']||'-')}</td>
+      <td>${esc(r._result||r['Status']||'')}</td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="7" style="text-align:center;padding:20px;color:#8b949e">No calls in this bucket</td></tr>';
+  const dark=(document.documentElement.getAttribute('data-theme')||'dark')!=='light';
+  const bg=dark?'#0d1117':'#f8fafc',card=dark?'#161b22':'#fff',border=dark?'#30363d':'#e2e8f0',text=dark?'#e6edf3':'#111827',muted='#8b949e';
+  const html=`<!doctype html><html><head><meta charset="utf-8"><title>${esc(label)} — Call Details</title>
+<style>
+body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:${bg};color:${text};margin:0;padding:24px}
+h1{font-size:20px;margin:0 0 4px}
+.sub{color:${muted};font-size:13px;margin-bottom:18px}
+.stats{display:flex;gap:16px;margin-bottom:18px;flex-wrap:wrap}
+.stat{background:${card};border:1px solid ${border};border-radius:8px;padding:10px 16px;min-width:130px}
+.stat b{display:block;font-size:20px}
+.stat span{font-size:11px;color:${muted};text-transform:uppercase}
+table{width:100%;border-collapse:collapse;font-size:13px;background:${card};border:1px solid ${border};border-radius:8px;overflow:hidden}
+th,td{padding:7px 10px;text-align:left;border-bottom:1px solid ${border}}
+th{color:${muted};font-size:11px;text-transform:uppercase}
+tr:last-child td{border-bottom:none}
+</style></head><body>
+<h1>${esc(label)}</h1>
+<div class="sub">${rows.length} calls &middot; reflects the dashboard's currently active filters</div>
+<div class="stats">
+  <div class="stat"><b>${rows.length}</b><span>Calls</span></div>
+  <div class="stat"><b>${avgRing}</b><span>Avg Waiting Time</span></div>
+  <div class="stat"><b>${avgTalk}</b><span>Avg Talk Time</span></div>
+</div>
+<table><thead><tr><th>Call Time</th><th>From</th><th>To</th><th>Agent</th><th>Waiting</th><th>Talking</th><th>Result</th></tr></thead>
+<tbody>${bodyRows}</tbody></table>
+</body></html>`;
+  const w=window.open('','_blank');
+  if(!w){alert('Popup blocked — allow popups for this site to view KPI details.');return}
+  w.document.open();w.document.write(html);w.document.close();
 }
 
 function agentInboundAnsweredRows(agentName){
