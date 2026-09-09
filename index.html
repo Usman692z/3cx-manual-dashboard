@@ -418,6 +418,7 @@ tbody tr:hover .sticky{background:var(--card2)}
   <button class="tab" onclick="switchTab('analysis')">Deep Analysis</button>
   <button class="tab" onclick="switchTab('calls')">Call Log</button>
   <button class="tab" onclick="switchTab('inbound')">Inbound Report</button>
+  <button class="tab" onclick="switchTab('qa')" style="position:relative">Call QA <span id="qa-badge" style="background:var(--orange);color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:20px;margin-left:4px;vertical-align:middle">0</span></button>
   <button class="tab" onclick="switchTab('abandoned')" style="position:relative">Abandoned Calls <span id="ab-badge" style="background:var(--red);color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:20px;margin-left:4px;vertical-align:middle">0</span></button>
 </div>
 
@@ -955,6 +956,49 @@ tbody tr:hover .sticky{background:var(--card2)}
   </div>
 </div><!-- /inbound -->
 
+<!-- ======= CALL QA ======= -->
+<div class="tab-content" id="tab-qa">
+  <div class="kpi-row" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin-bottom:var(--g)">
+    <div class="kpi bl"><div class="kpi-lbl">Reviewable Calls</div><div class="kpi-val" id="qa-total">0</div><div class="kpi-sub">completed calls in filter</div></div>
+    <div class="kpi gr"><div class="kpi-lbl">Reviewed</div><div class="kpi-val" id="qa-reviewed">0</div><div class="kpi-sub" id="qa-reviewed-p">-</div></div>
+    <div class="kpi or"><div class="kpi-lbl">Pending Review</div><div class="kpi-val" id="qa-pending">0</div><div class="kpi-sub">not yet scored</div></div>
+    <div class="kpi pu"><div class="kpi-lbl">Avg QA Score</div><div class="kpi-val" id="qa-avg">—</div><div class="kpi-sub">out of 100%</div></div>
+  </div>
+
+  <div class="tcard">
+    <h3>QA Score by Agent <span class="cnt" id="qa-ag-cnt"></span></h3>
+    <div class="tbl-wrap"><table>
+      <thead><tr>
+        <th>Agent</th><th>Department</th>
+        <th style="text-align:right">Reviewed</th>
+        <th style="text-align:right">Reviewable</th>
+        <th style="text-align:right">Avg QA Score</th>
+      </tr></thead>
+      <tbody id="qa-ag-body"><tr><td colspan="5" style="text-align:center;color:var(--muted);padding:24px">Load data to see QA report</td></tr></tbody>
+    </table></div>
+  </div>
+
+  <div class="tcard">
+    <h3>Call-by-Call QA <span class="cnt" id="qa-cnt"></span>
+      <button class="btn" style="margin-left:auto" onclick="exportQACSV()">Export CSV</button>
+    </h3>
+    <div class="tbl-wrap"><table>
+      <thead><tr>
+        <th>Call Time</th><th>Agent</th><th>Talk Time</th><th>Sentiment</th><th>QA Score</th><th>Reviewer</th><th></th>
+      </tr></thead>
+      <tbody id="qa-body"></tbody>
+    </table></div>
+    <div class="pager">
+      <div class="pager-info" id="qa-pg-info"></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn" onclick="qaPrev()">Prev</button>
+        <span id="qa-pg-lbl" style="font-size:12px;color:var(--muted);align-self:center"></span>
+        <button class="btn" onclick="qaNext()">Next</button>
+      </div>
+    </div>
+  </div>
+</div><!-- /qa -->
+
 <!-- ======= ABANDONED CALLS ======= -->
 <div class="tab-content" id="tab-abandoned">
   <div class="kpi-row" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin-bottom:var(--g)">
@@ -1024,6 +1068,38 @@ tbody tr:hover .sticky{background:var(--card2)}
       <button class="btn" onclick="addAgentRow()">+ Add Agent</button>
       <button class="btn btn-primary" onclick="saveAgents()" style="margin-left:auto">Save</button>
       <button class="btn" onclick="resetAgents()">Reset to Default</button>
+    </div>
+  </div>
+</div>
+
+<div id="qa-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9998;align-items:center;justify-content:center;padding:20px">
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px 22px;max-width:720px;width:100%;max-height:88vh;overflow:auto">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <h3 style="font-size:16px">Call QA Scorecard</h3>
+      <button class="btn" onclick="qaCloseModal()">&#10005;</button>
+    </div>
+    <div id="qa-modal-meta" style="font-size:12px;color:var(--muted);margin-bottom:12px"></div>
+
+    <div style="background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:14px;max-height:160px;overflow:auto;font-size:12px;line-height:1.6">
+      <div style="font-weight:700;color:var(--blue);font-size:10px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">AI Summary</div>
+      <div id="qa-modal-summary" style="margin-bottom:8px;color:var(--text)">—</div>
+      <div style="font-weight:700;color:var(--blue);font-size:10px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Transcription</div>
+      <div id="qa-modal-transcript" style="white-space:pre-wrap;color:var(--text)">—</div>
+    </div>
+
+    <div id="qa-modal-criteria" style="display:grid;gap:8px;margin-bottom:12px"></div>
+
+    <div style="font-weight:700;margin-bottom:10px">Total: <span id="qa-modal-total">0</span>/25 (<span id="qa-modal-pct">0</span>%)</div>
+
+    <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Reviewer Name</label>
+    <input id="qa-modal-reviewer" type="text" placeholder="Your name" style="background:var(--card2);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:13px;width:100%;margin-bottom:10px;font-family:inherit;box-sizing:border-box">
+
+    <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Notes / Feedback</label>
+    <textarea id="qa-modal-notes" rows="3" placeholder="Feedback for agent..." style="background:var(--card2);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:13px;width:100%;font-family:inherit;resize:vertical;box-sizing:border-box"></textarea>
+
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button class="btn btn-primary" onclick="qaSaveScore()" style="margin-left:auto">Save Score</button>
+      <button class="btn" onclick="qaCloseModal()">Cancel</button>
     </div>
   </div>
 </div>
@@ -1128,6 +1204,20 @@ let SEL_AGENTS=new Set();
 let ALL_AGENTS=[];
 let PG=0; const PSZ=50;
 let AB_PG=0; const AB_PSZ=50;
+let QA_PG=0; const QA_PSZ=50;
+let QA_SCORES={};
+(function(){try{
+  const s=JSON.parse(localStorage.getItem('qaScores3cx'));
+  if(s&&typeof s==='object')QA_SCORES=s;
+}catch(e){}})();
+let QA_EDIT_CID=null;
+const QA_CRITERIA=[
+  {key:'greet',  lbl:'Greeting & Opening'},
+  {key:'listen', lbl:'Problem Understanding / Active Listening'},
+  {key:'resolve',lbl:'Resolution / Solution Provided'},
+  {key:'tone',   lbl:'Professionalism & Tone'},
+  {key:'close',  lbl:'Closing & Confirmation'},
+];
 let TRANS_MAP={}; // key→{s:summary,t:transcription} for current page
 let CH={};
 let HM_MODE='total';
@@ -1703,6 +1793,7 @@ function renderAll(){
   buildMonthly();
   AB_PG=0;renderAbandoned();
   renderInboundReport();
+  QA_PG=0;renderCallQA();
 }
 
 // ============================================================
@@ -2417,8 +2508,12 @@ function buildAgHourHeatmap(){
   agents.forEach(ag=>{for(let h=0;h<24;h++){const d=grid[ag][h];allVals.push(AGH_MODE==='total'?d.t:AGH_MODE==='ans'?d.a:d.t?Math.round(d.a/d.t*100):0)}});
   const mx=Math.max(...allVals,1);
 
-  let html='<thead><tr><th style="padding:3px 8px;color:var(--muted);font-size:10px;text-align:right;white-space:nowrap">Agent \\ Hour</th>';
-  for(let h=0;h<24;h++){const ampm=h===0?'12am':h<12?h+'am':h===12?'12pm':(h-12)+'pm';html+='<th style="padding:2px 3px;color:var(--muted);font-size:9px;text-align:center;min-width:24px;white-space:nowrap">'+ampm+'</th>';}
+  let html='<thead><tr><th style="padding:3px 8px;color:var(--muted);font-size:10px;text-align:right;white-space:nowrap">Agent \\ Hour<br><span style="font-size:8px;font-weight:400">PKT / KSA</span></th>';
+  for(let h=0;h<24;h++){
+    const ampm=h===0?'12am':h<12?h+'am':h===12?'12pm':(h-12)+'pm';
+    const ksaH=(h-2+24)%24, ksaAmpm=ksaH===0?'12am':ksaH<12?ksaH+'am':ksaH===12?'12pm':(ksaH-12)+'pm';
+    html+='<th style="padding:2px 3px;color:var(--muted);font-size:9px;text-align:center;min-width:24px;white-space:nowrap">'+ampm+'<br><span style="color:var(--cyan);font-size:8px">'+ksaAmpm+'</span></th>';
+  }
   html+='</tr></thead><tbody>';
 
   agents.forEach(ag=>{
@@ -3716,7 +3811,7 @@ function renderFileBar(){
 //  TABS
 // ============================================================
 function switchTab(name){
-  const tabs=['overview','agents','analysis','calls','inbound','abandoned'];
+  const tabs=['overview','agents','analysis','calls','inbound','qa','abandoned'];
   document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',tabs[i]===name));
   document.querySelectorAll('.tab-content').forEach(c=>c.classList.toggle('active',c.id==='tab-'+name));
 }
@@ -3988,6 +4083,148 @@ function quickFilter(mode){
     const n=FILT.length;
     toast('This Month ('+monthStart+' → '+today+'): '+n+' calls',n>0?'ok':'warn');
   }
+}
+
+// ============================================================
+//  CALL QA TAB
+// ============================================================
+function qaCid(r){return(r['Call ID']||'').trim()||r._dt.getTime().toString()}
+function getQaReviewable(){
+  return FILT.filter(r=>r._result==='Completed Call'&&isAgent(agentOf(r))).sort((a,b)=>b._dt-a._dt);
+}
+
+function renderCallQA(){
+  const calls=getQaReviewable();
+  const total=calls.length;
+  let reviewed=0,pctSum=0;
+  calls.forEach(r=>{const s=QA_SCORES[qaCid(r)];if(s){reviewed++;pctSum+=s.pct;}});
+  const pending=total-reviewed;
+
+  setText('qa-total',total);
+  setText('qa-reviewed',reviewed);
+  setText('qa-reviewed-p',total?Math.round(reviewed/total*100)+'% of reviewable':'-');
+  setText('qa-pending',pending);
+  setText('qa-avg',reviewed?Math.round(pctSum/reviewed)+'%':'—');
+  setText('qa-cnt',total+' calls');
+
+  const badge=document.getElementById('qa-badge');
+  if(badge){badge.textContent=pending;badge.style.background=pending>0?'var(--orange)':'var(--green)'}
+
+  // Agent-wise QA summary
+  const byAgent={};
+  calls.forEach(r=>{
+    const ag=agentOf(r);
+    if(!byAgent[ag])byAgent[ag]={agent:ag,dept:agentDept(ag),reviewable:0,reviewed:0,pctSum:0};
+    byAgent[ag].reviewable++;
+    const s=QA_SCORES[qaCid(r)];
+    if(s){byAgent[ag].reviewed++;byAgent[ag].pctSum+=s.pct;}
+  });
+  const agRows=Object.values(byAgent).sort((a,b)=>b.reviewable-a.reviewable);
+  setText('qa-ag-cnt',agRows.length+' agents');
+  document.getElementById('qa-ag-body').innerHTML=agRows.map(a=>{
+    const avg=a.reviewed?Math.round(a.pctSum/a.reviewed):null;
+    const color=avg==null?'var(--muted)':avg>=85?'var(--green)':avg>=70?'var(--orange)':'var(--red)';
+    return`<tr>
+      <td style="font-weight:600">${esc(a.agent)}</td>
+      <td>${esc(a.dept||'—')}</td>
+      <td style="text-align:right">${a.reviewed}</td>
+      <td style="text-align:right">${a.reviewable}</td>
+      <td style="text-align:right;font-weight:700;color:${color}">${avg==null?'—':avg+'%'}</td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:24px">No reviewable calls in current filter</td></tr>';
+
+  // Call-by-call pager
+  const n=total,s=QA_PG*QA_PSZ,e=Math.min(s+QA_PSZ,n);
+  setText('qa-pg-info',n?(s+1)+'-'+e+' of '+n+' calls':'No calls');
+  setText('qa-pg-lbl',n?'Page '+(QA_PG+1)+' of '+Math.ceil(n/QA_PSZ):'');
+
+  document.getElementById('qa-body').innerHTML=calls.slice(s,e).map(r=>{
+    const cid=qaCid(r);
+    const sc=QA_SCORES[cid];
+    const scoreBadge=sc
+      ?`<span style="padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;background:rgba(63,185,80,.15);color:var(--green)">${sc.pct}%</span>`
+      :'<span style="padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;background:rgba(210,153,34,.12);color:var(--orange)">Pending</span>';
+    return`<tr>
+      <td style="font-size:11px;color:var(--muted)">${esc(r['Call Time']||'')}</td>
+      <td style="font-weight:600">${esc(agentOf(r))}</td>
+      <td>${sfmt(r._ts)}</td>
+      <td>${stHtml(r._sent)}</td>
+      <td>${scoreBadge}</td>
+      <td style="color:var(--muted);font-size:12px">${esc((sc&&sc.reviewer)||'—')}</td>
+      <td><button class="btn" onclick="qaOpenModal('${cid}')">${sc?'Edit':'Score'}</button></td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:24px">No completed calls in current filter</td></tr>';
+}
+
+function qaOpenModal(cid){
+  const r=getQaReviewable().find(x=>qaCid(x)===cid);
+  if(!r){toast('Call not found in current filter','err');return;}
+  QA_EDIT_CID=cid;
+  document.getElementById('qa-modal-meta').textContent=
+    (r['Call Time']||'')+'  ·  '+agentOf(r)+'  ·  Talk '+sfmt(r._ts)+'  ·  Sentiment '+(r._sent!=null?r._sent+'/5':'—');
+  document.getElementById('qa-modal-summary').textContent=(r['Summary']||'').trim()||'No AI summary available';
+  document.getElementById('qa-modal-transcript').textContent=(r['Transcription']||'').trim()||'No transcription available';
+
+  const sc=QA_SCORES[cid]||{};
+  document.getElementById('qa-modal-criteria').innerHTML=QA_CRITERIA.map(c=>{
+    const v=sc[c.key]||3;
+    const opts=[1,2,3,4,5].map(n=>`<option value="${n}" ${+v===n?'selected':''}>${n}</option>`).join('');
+    return`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+      <label style="font-size:13px">${esc(c.lbl)}</label>
+      <select data-crit="${c.key}" onchange="qaRecalc()" style="${AGM_IN};width:70px">${opts}</select>
+    </div>`;
+  }).join('');
+  document.getElementById('qa-modal-reviewer').value=sc.reviewer||'';
+  document.getElementById('qa-modal-notes').value=sc.notes||'';
+  qaRecalc();
+  document.getElementById('qa-modal').style.display='flex';
+}
+function qaRecalc(){
+  let total=0;
+  document.querySelectorAll('#qa-modal-criteria [data-crit]').forEach(sel=>total+=+sel.value);
+  const pct=Math.round(total/(QA_CRITERIA.length*5)*100);
+  setText('qa-modal-total',total);
+  setText('qa-modal-pct',pct);
+}
+function qaCloseModal(){document.getElementById('qa-modal').style.display='none';QA_EDIT_CID=null}
+function qaSaveScore(){
+  if(!QA_EDIT_CID)return;
+  const r=getQaReviewable().find(x=>qaCid(x)===QA_EDIT_CID);
+  const entry={agent:r?agentOf(r):'',dept:r?agentDept(agentOf(r)):'',callTime:r?(r['Call Time']||''):''};
+  let total=0;
+  document.querySelectorAll('#qa-modal-criteria [data-crit]').forEach(sel=>{entry[sel.dataset.crit]=+sel.value;total+=+sel.value});
+  entry.total=total;
+  entry.pct=Math.round(total/(QA_CRITERIA.length*5)*100);
+  entry.reviewer=document.getElementById('qa-modal-reviewer').value.trim();
+  entry.notes=document.getElementById('qa-modal-notes').value.trim();
+  entry.date=new Date().toISOString();
+  QA_SCORES[QA_EDIT_CID]=entry;
+  localStorage.setItem('qaScores3cx',JSON.stringify(QA_SCORES));
+  qaCloseModal();
+  renderCallQA();
+  toast('QA score saved','ok');
+}
+function qaPrev(){if(QA_PG>0){QA_PG--;renderCallQA()}}
+function qaNext(){if((QA_PG+1)*QA_PSZ<getQaReviewable().length){QA_PG++;renderCallQA()}}
+
+function exportQACSV(){
+  const calls=getQaReviewable();
+  const hdrs=['Call Time','Agent','Department',...QA_CRITERIA.map(c=>c.lbl),'Total /25','QA %','Reviewer','Notes'];
+  let csv=hdrs.join(',')+'\n';
+  let any=false;
+  calls.forEach(r=>{
+    const sc=QA_SCORES[qaCid(r)];
+    if(!sc)return;
+    any=true;
+    const row=[r['Call Time'],agentOf(r),agentDept(agentOf(r)),...QA_CRITERIA.map(c=>sc[c.key]||''),sc.total,sc.pct,sc.reviewer||'',sc.notes||''];
+    csv+=row.map(v=>'"'+String(v||'').replace(/"/g,'""')+'"').join(',')+'\n';
+  });
+  if(!any){toast('No scored calls in current filter to export','warn');return;}
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download='call_qa_scores_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click();
+  toast('QA scores exported','ok');
 }
 
 // ============================================================
