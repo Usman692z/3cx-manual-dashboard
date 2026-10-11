@@ -908,7 +908,12 @@ tbody tr:hover .sticky{background:var(--card2)}
 <!-- ======= CALL LOG ======= -->
 <div class="tab-content" id="tab-calls">
   <div class="tcard">
-    <h3>Call Log <span class="cnt" id="log-cnt"></span></h3>
+    <h3>Call Log <span class="cnt" id="log-cnt"></span>
+      <span style="margin-left:auto;display:flex;gap:8px">
+        <button class="btn btn-primary" onclick="exportCSV()" title="Exports all filtered records, not just this page">Export CSV</button>
+        <button class="btn" onclick="exportLogXLSX()" title="Exports all filtered records, not just this page">Export Excel</button>
+      </span>
+    </h3>
     <div class="tbl-wrap"><table>
       <thead><tr>
         <th>Call Time</th><th>From</th><th>To</th><th>Direction</th>
@@ -3897,17 +3902,40 @@ function exportShareable(){
   },600);
 }
 
-function exportCSV(){
-  const cols=['Call Time','From','To','Direction','Status','Ringing','Talking','_result','_sent','Summary','Transcription','Call Activity Details'];
-  const hdrs=['Call Time','From','To','Direction','Status','Ringing','Talking','Call Result','Sentiment','AI Summary','Transcription','Activity Details'];
-  let csv=hdrs.join(',')+'\n';
-  [...FILT].reverse().forEach(r=>{
-    csv+=cols.map(k=>{const v=k==='_result'?r._result:k==='_sent'?(r._sent!=null?r._sent:''):(r[k]||'');return'"'+String(v).replace(/"/g,'""')+'"'}).join(',')+'\n';
-  });
+const LOG_HDRS=['Call Time','From','To','Direction','Status','Ringing','Talking','Call Result','Sentiment','AI Summary','Transcription','Activity Details'];
+function logRows(){
+  return [...FILT].reverse().map(r=>[r['Call Time'],r['From'],r['To'],r['Direction'],r['Status'],r['Ringing'],r['Talking'],
+    r._result,r._sent!=null?r._sent:'',r['Summary'],r['Transcription'],r['Call Activity Details']].map(v=>v==null?'':String(v)));
+}
+function saveBlob(blob,ext){
   const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
-  a.download='3cx_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.href=URL.createObjectURL(blob);
+  a.download='3cx_'+new Date().toISOString().slice(0,10)+'.'+ext;
   a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+function exportCSV(){
+  if(!FILT.length){toast('No records to export','warn');return;}
+  const q=v=>'"'+v.replace(/"/g,'""')+'"';
+  const lines=[LOG_HDRS.map(q).join(',')];
+  logRows().forEach(r=>lines.push(r.map(q).join(',')));
+  // BOM so Excel reads UTF-8 (Arabic/Urdu names) correctly
+  saveBlob(new Blob(['﻿'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'}),'csv');
+  toast('✓ Exported '+FILT.length.toLocaleString()+' records','ok');
+}
+function exportLogXLSX(){
+  if(!FILT.length){toast('No records to export','warn');return;}
+  toast('Building Excel file…','ok');
+  loadSheetJs(err=>{
+    if(err){toast('Excel library failed to load — use Export CSV','warn');return;}
+    // Excel cell limit is 32767 chars
+    const rows=logRows().map(r=>r.map(v=>v.slice(0,32000)));
+    const ws=XLSX.utils.aoa_to_sheet([LOG_HDRS,...rows]);
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,'Call Log');
+    XLSX.writeFile(wb,'3cx_'+new Date().toISOString().slice(0,10)+'.xlsx');
+    toast('✓ Exported '+rows.length.toLocaleString()+' records','ok');
+  });
 }
 
 // ============================================================
